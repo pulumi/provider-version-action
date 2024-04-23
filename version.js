@@ -1,50 +1,57 @@
-import core from "@actions/core";
 import github from "@actions/github";
 import semver from "semver";
 import { Octokit } from "octokit";
 
 /**
- *
+ * Calculate the version to use for the current build.
  * @param {any} fetch
  * @param {typeof github.context} context
  */
 export async function calculateVersion(context) {
   // Are we building a tagged release?
-  if (
-    context.eventName === "push" &&
-    context.payload.ref.startsWith("refs/tags/")
-  ) {
+  if (context.eventName === "push" && context.ref.startsWith("refs/tags/v")) {
     // Get the version from the tag
-    const version = context.payload.ref.replace("refs/tags/", "");
+    const version = context.ref.replace("refs/tags/", "");
     const parsed = semver.parse(version); // Ensure it's a valid semver version
     if (parsed === null) {
       throw new Error(`Invalid tag version: ${version}`);
     }
     return parsed.version;
   }
-  const octokitArgs = { auth: process.env.GITHUB_TOKEN };
-  if (fetch) {
-    octokitArgs.request = { fetch };
-  }
   // Get the latest release
-  const octokit = new Octokit(octokitArgs);
-  const response = await octokit.rest.repos.getLatestRelease({
-    owner: context.repo.owner,
-    repo: context.repo.repo,
-  });
-  const latestTag = response === undefined ? "v0.0.0" : response.data.tag_name;
-  const parsed = semver.parse(latestTag); // Ensure it's a valid semver version
-  if (parsed === null) {
-    console.warn(
-      `Latest release tag is an invalid semver version: ${latestTag}`
-    );
-    parsed = semver.parse("0.0.0-dev");
-  }
+  const parsed = await getPreviousReleaseVersion(context);
   const nextVersion = parsed.inc("minor");
   const shortHash = context.sha.slice(0, 7);
   const timestamp = await getTimestamp(context);
   const version = `${nextVersion.version}-alpha.${timestamp}.${shortHash}`;
   return version;
+}
+
+async function getPreviousReleaseVersion(context) {
+  const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+  try {
+    const response = await octokit.rest.repos.getLatestRelease({
+      owner: context.repo.owner,
+      repo: context.repo.repo,
+    });
+    const latestTag = response?.data?.tag_name;
+    if (latestTag === undefined) {
+      console.warn("Could not find latest release tag");
+      return semver.parse("0.0.0");
+    }
+    const parsed = semver.parse(latestTag); // Ensure it's a valid semver version
+    if (parsed === null) {
+      console.warn(
+        `Latest release tag is an invalid semver version: ${latestTag}`
+      );
+      return semver.parse("0.0.0");
+    }
+    return parsed;
+  } catch (error) {
+    // Prefer always returning some kind of version so we don't break builds due to network issues or unexpected release formats.
+    console.warn("Failed to get latest release", error);
+    return semver.parse("0.0.0");
+  }
 }
 
 /**
@@ -53,24 +60,27 @@ export async function calculateVersion(context) {
  * @returns {Promise<string>}
  */
 async function getTimestamp(context) {
-  const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
-  const currentCommit = await octokit.rest.repos.getCommit({
-    owner: context.repo.owner,
-    repo: context.repo.repo,
-    ref: context.sha,
-  });
-  const commitDate = currentCommit?.data?.commit?.committer?.date;
-  if (commitDate === undefined) {
-    console.warn("Could not find commit date");
-    return new Date().getTime() / 1000;
+  try {
+    const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+    const currentCommit = await octokit.rest.repos.getCommit({
+      owner: context.repo.owner,
+      repo: context.repo.repo,
+      ref: context.sha,
+    });
+    const commitDate = currentCommit?.data?.commit?.committer?.date;
+    const date = new Date(commitDate);
+    let time = date.getTime();
+    // Check if the date is valid
+    if (isNaN(time)) {
+      throw new Error(`Invalid commit date: ${commitDate}`);
+    }
+    // Remove milliseconds
+    return (time / 1000).toString();
+  } catch (error) {
+    console.warn(
+      "Failed to get commit date, using GitHub run_id instead",
+      error
+    );
+    return context.runId;
   }
-  const date = new Date(commitDate);
-  const time = date.getTime();
-  // Check if the date is valid
-  if (isNaN(time)) {
-    console.warn("Invalid commit date");
-    time = new Date().getTime();
-  }
-  // Remove milliseconds
-  return time / 1000;
 }
