@@ -93,5 +93,5 @@ Major
 
 - The major, minor and patch numbers are taken from the latest release and incremented to the next minor version.
 - The alpha label.
-- Commit timestamp to order pre-releases.
+- Commit timestamp to order pre-releases sequentially.
 - Short hash of the commit to help identify the source where the release originated.
