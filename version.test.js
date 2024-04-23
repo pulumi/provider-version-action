@@ -48,7 +48,7 @@ describe("Branch pushed", () => {
           repo: "repo",
         },
       })
-    ).toBe("1.1.0-alpha.1577836800.699a10d");
+    ).toBe("1.1.0-alpha.1577836800+699a10d");
   });
 
   test("without previous release", async () => {
@@ -75,7 +75,7 @@ describe("Branch pushed", () => {
           repo: "repo",
         },
       })
-    ).toBe("0.1.0-alpha.1577836800.699a10d");
+    ).toBe("0.1.0-alpha.1577836800+699a10d");
   });
 
   test("failure to fetch commit", async () => {
@@ -101,7 +101,7 @@ describe("Branch pushed", () => {
           repo: "repo",
         },
       })
-    ).toBe("1.1.0-alpha.1234.699a10d");
+    ).toBe("1.1.0-alpha.1234+699a10d");
   });
 });
 
@@ -130,5 +130,5 @@ test("PR build", async () => {
         repo: "repo",
       },
     })
-  ).toBe("1.3.0-alpha.1577836800.699a10d");
+  ).toBe("1.3.0-alpha.1577836800+699a10d");
 });

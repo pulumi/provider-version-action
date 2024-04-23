@@ -24,7 +24,7 @@ export async function calculateVersion(context) {
   const nextVersion = parsed.inc("minor");
   const shortHash = context.sha.slice(0, 7);
   const timestamp = await getTimestamp(context);
-  const version = `${nextVersion.version}-alpha.${timestamp}.${shortHash}`;
+  const version = `${nextVersion.version}-alpha.${timestamp}+${shortHash}`;
   return version;
 }
 
