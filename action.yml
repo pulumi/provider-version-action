@@ -1,0 +1,8 @@
+name: 'Provider Version'
+description: 'Calculate the version to be used during a Pulumi provider build.'
+outputs:
+  version:
+    description: 'The calculated version'
+runs:
+  using: 'node20'
+  main: 'index.js'
