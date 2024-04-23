@@ -16,14 +16,11 @@ export async function calculateVersion(context) {
   ) {
     // Get the version from the tag
     const version = context.payload.ref.replace("refs/tags/", "");
-    const parsed = semver.parse(removeV(version)); // Ensure it's a valid semver version
+    const parsed = semver.parse(version); // Ensure it's a valid semver version
     if (parsed === null) {
-      console.warn(
-        `Latest release tag is an invalid semver version: ${version}`
-      );
-      parsed = semver.parse("0.0.0-dev");
+      throw new Error(`Invalid tag version: ${version}`);
     }
-    return parsed.toString();
+    return parsed.version;
   }
   const octokitArgs = { auth: process.env.GITHUB_TOKEN };
   if (fetch) {
@@ -36,7 +33,7 @@ export async function calculateVersion(context) {
     repo: context.repo.repo,
   });
   const latestTag = response === undefined ? "v0.0.0" : response.data.tag_name;
-  const parsed = semver.parse(removeV(latestTag)); // Ensure it's a valid semver version
+  const parsed = semver.parse(latestTag); // Ensure it's a valid semver version
   if (parsed === null) {
     console.warn(
       `Latest release tag is an invalid semver version: ${latestTag}`
@@ -76,13 +73,4 @@ async function getTimestamp(context) {
   }
   // Remove milliseconds
   return time / 1000;
-}
-
-/**
- *
- * @param {string} version
- * @returns
- */
-function removeV(version) {
-  return version.replace(/^v/, "");
 }
