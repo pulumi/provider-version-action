@@ -1,3 +1,4 @@
+import { warning } from "@actions/core";
 import github from "@actions/github";
 import semver from "semver";
 import { Octokit } from "octokit";
@@ -36,20 +37,18 @@ async function getPreviousReleaseVersion(context) {
     });
     const latestTag = response?.data?.tag_name;
     if (latestTag === undefined) {
-      console.warn("Could not find latest release tag");
+      warning("Could not find latest release tag");
       return semver.parse("0.0.0");
     }
     const parsed = semver.parse(latestTag); // Ensure it's a valid semver version
     if (parsed === null) {
-      console.warn(
-        `Latest release tag is an invalid semver version: ${latestTag}`
-      );
+      warning(`Latest release tag is an invalid semver version: ${latestTag}`);
       return semver.parse("0.0.0");
     }
     return parsed;
   } catch (error) {
     // Prefer always returning some kind of version so we don't break builds due to network issues or unexpected release formats.
-    console.warn("Failed to get latest release", error);
+    warning(`Failed to get latest release: ${error.toString()}`);
     return semver.parse("0.0.0");
   }
 }
@@ -77,9 +76,9 @@ async function getTimestamp(context) {
     // Remove milliseconds
     return (time / 1000).toString();
   } catch (error) {
-    console.warn(
-      "Failed to get commit date, using GitHub run_id instead",
-      error
+    warning(
+      "Failed to get commit date, using GitHub run_id instead\n" +
+        error.toString()
     );
     return context.runId;
   }
