@@ -1,5 +1,9 @@
 name: 'Provider Version'
 description: 'Calculate the version to be used during a Pulumi provider build.'
+inputs:
+  set-env:
+    required: false
+    description: 'Optional name of the environment variable to set with the calculated version.'
 outputs:
   version:
     description: 'The calculated version'
