@@ -1,0 +1,44 @@
+name: Self-test
+on:
+  workflow_dispatch: {}
+  pull_request: {}
+  push:
+    branches:
+      - main
+jobs:
+  self-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./
+        id: provider-version
+        with:
+          set-env: "PROVIDER_VERSION"
+
+      - name: Print outputs
+        run: 'echo "Step: ${{ steps.provider-version.outputs.version }}, Environment: ${PROVIDER_VERSION}"'
+
+      - if: steps.provider-version.outputs.version != env.PROVIDER_VERSION
+        run: |
+          echo "Version does not match expected value"
+          exit 1
+        continue-on-error: true
+
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+      - name: Check git status
+        id: git-status
+        shell: bash
+        run: echo "STATUS=$(git status -s)" >> ${GITHUB_OUTPUT}
+
+      - name: Fail if work-tree not clean
+        if: steps.git-status.STATUS != ''
+        shell: bash
+        run: |
+          echo "${{ steps.git-status.STATUS }}"
+          git diff | head -20
+          exit 1
+        continue-on-error: true
