@@ -1,19 +1,19 @@
 import { warning } from "@actions/core";
-import github from "@actions/github";
-import semver from "semver";
+import { context } from "@actions/github";
+import { parse as parseSemver } from "semver";
 import { Octokit } from "octokit";
 
 /**
  * Calculate the version to use for the current build.
  * @param {any} fetch
- * @param {typeof github.context} context
+ * @param {typeof context} context
  */
 export async function calculateVersion(context) {
   // Are we building a tagged release?
   if (context.eventName === "push" && context.ref.startsWith("refs/tags/v")) {
     // Get the version from the tag
     const version = context.ref.replace("refs/tags/", "");
-    const parsed = semver.parse(version); // Ensure it's a valid semver version
+    const parsed = parseSemver(version); // Ensure it's a valid semver version
     if (parsed === null) {
       throw new Error(`Invalid tag version: ${version}`);
     }
@@ -38,24 +38,24 @@ async function getPreviousReleaseVersion(context) {
     const latestTag = response?.data?.tag_name;
     if (latestTag === undefined) {
       warning("Could not find latest release tag");
-      return semver.parse("0.0.0");
+      return parseSemver("0.0.0");
     }
-    const parsed = semver.parse(latestTag); // Ensure it's a valid semver version
+    const parsed = parseSemver(latestTag); // Ensure it's a valid semver version
     if (parsed === null) {
       warning(`Latest release tag is an invalid semver version: ${latestTag}`);
-      return semver.parse("0.0.0");
+      return parseSemver("0.0.0");
     }
     return parsed;
   } catch (error) {
     // Prefer always returning some kind of version so we don't break builds due to network issues or unexpected release formats.
     warning(`Failed to get latest release: ${error.toString()}`);
-    return semver.parse("0.0.0");
+    return parseSemver("0.0.0");
   }
 }
 
 /**
  *Returns the unix timestamp of the commit being built
- * @param {typeof github.context} context
+ * @param {typeof context} context
  * @returns {Promise<string>}
  */
 async function getTimestamp(context) {
