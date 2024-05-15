@@ -7,7 +7,7 @@ The calculated version is always valid [semver 2.0.0](https://semver.org/) – w
 ## Usage
 
 ```yaml
-- uses: pulumi/provider-version-action
+- uses: pulumi/provider-version-action@v1
   with:
     # Optional name of the environment variable to set with the calculated version, for example: PROVIDER_VERSION
     # Defaults to empty which results in no environment variable being set.
@@ -28,7 +28,7 @@ Set the `PROVIDER_VERSION` environment variable for use in any subsequent steps 
 
 ```yaml
 steps:
-- uses: pulumi/provider-version-action
+- uses: pulumi/provider-version-action@v1
   with:
     set-env: PROVIDER_VERSION
 - name: Print version
@@ -42,7 +42,7 @@ Access the calculated version via the step's output:
 ```yaml
 steps:
 - id: version
-  uses: pulumi/provider-version-action
+  uses: pulumi/provider-version-action@v1
 - name: Print version
   run: echo "${{ steps.version.outputs.version }}"
 ```
@@ -57,7 +57,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - id: version
-      uses: pulumi/provider-version-action
+      uses: pulumi/provider-version-action@v1
     outputs:
       version: ${{ steps.version.outputs.version }}
   build:
