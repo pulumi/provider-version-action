@@ -22,10 +22,17 @@ export async function calculateVersion(context) {
   // Get the latest release
   const parsed = await getPreviousReleaseVersion(context);
   const nextVersion = parsed.inc("minor");
-  const shortHash = context.sha.slice(0, 7);
   const timestamp = await getTimestamp(context);
-  const version = `${nextVersion.version}-alpha.${timestamp}+${shortHash}`;
-  return version;
+  if (
+    context.eventName === "push" &&
+    (context.ref === "refs/heads/master" || context.ref === "refs/heads/main")
+  ) {
+    // If we're building the main branch, don't include the `+{shortHash}` part as Python considers this a "local" version
+    // and will not allow it to be uploaded to PyPI.
+    return `${nextVersion.version}-alpha.${timestamp}`;
+  }
+  const shortHash = context.sha.slice(0, 7);
+  return `${nextVersion.version}-alpha.${timestamp}+${shortHash}`;
 }
 
 async function getPreviousReleaseVersion(context) {
