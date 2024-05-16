@@ -23,7 +23,7 @@ describe("Tag pushed", () => {
   });
 });
 
-describe("Branch pushed", () => {
+describe("main/master branch pushed", () => {
   test("with previous release", async () => {
     // Mock the latest release response
     fetch.mockResponseOnce(async () => ({
@@ -48,7 +48,7 @@ describe("Branch pushed", () => {
           repo: "repo",
         },
       })
-    ).toBe("1.1.0-alpha.1577836800+699a10d");
+    ).toBe("1.1.0-alpha.1577836800");
   });
 
   test("without previous release", async () => {
@@ -75,10 +75,10 @@ describe("Branch pushed", () => {
           repo: "repo",
         },
       })
-    ).toBe("0.1.0-alpha.1577836800+699a10d");
+    ).toBe("0.1.0-alpha.1577836800");
   });
 
-  test("failure to fetch commit", async () => {
+  test("failure to fetch commit falls back to runId", async () => {
     // Mock the latest release response
     fetch.mockResponseOnce(async () => ({
       body: JSON.stringify({ tag_name: "v1.0.0" }),
@@ -101,7 +101,7 @@ describe("Branch pushed", () => {
           repo: "repo",
         },
       })
-    ).toBe("1.1.0-alpha.1234+699a10d");
+    ).toBe("1.1.0-alpha.1234");
   });
 });
 
