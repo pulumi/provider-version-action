@@ -18,6 +18,7 @@ __nccwpck_require__.r(__webpack_exports__);
 
 try {
   const version = await (0,_version__WEBPACK_IMPORTED_MODULE_2__/* .calculateVersion */ .x)(_actions_github__WEBPACK_IMPORTED_MODULE_1__.context);
+  (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.info)(`Calculated version: ${version}`);
   (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.setOutput)("version", version);
   const envVar = (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput)("set-env");
   if (envVar !== "") {

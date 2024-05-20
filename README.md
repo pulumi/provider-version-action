@@ -72,9 +72,9 @@ jobs:
 
 This action supports 3 build scenarios:
 
-1. Pushing a version tag beginning with "v" (e.g. `v1.2.3`). The version from the tag will be used.
-2. Pushing to a main branch. An alpha version will be generated.
-3. Building a pull request. An alpha version will be generated.
+1. Pushing a version tag beginning with "v" (e.g. `v1.2.3`). The version from the tag will be used e.g. `1.2.3`
+2. Pushing to a main branch. An alpha version will be generated e.g. `1.2.3-alpha.1577836800`
+3. Building a pull request. An alpha version will be generated, with a shorthash suffix e.g. `1.2.3-alpha.1577836800+699a10d`
 
 ## Alpha Version Format
 
