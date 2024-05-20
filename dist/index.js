@@ -42115,10 +42115,7 @@ async function calculateVersion(context) {
   const parsed = await getPreviousReleaseVersion(context);
   const nextVersion = parsed.inc("minor");
   const timestamp = await getTimestamp(context);
-  if (
-    context.eventName === "push" &&
-    (context.ref === "refs/heads/master" || context.ref === "refs/heads/main")
-  ) {
+  if (wasMainBranchPushed(context)) {
     // If we're building the main branch, don't include the `+{shortHash}` part as Python considers this a "local" version
     // and will not allow it to be uploaded to PyPI.
     return `${nextVersion.version}-alpha.${timestamp}`;
@@ -42127,6 +42124,23 @@ async function calculateVersion(context) {
   return `${nextVersion.version}-alpha.${timestamp}+${shortHash}`;
 }
 
+/**
+ * Returns true if the main branch was pushed.
+ * @param {typeof context} context
+ * @returns {boolean}
+ */
+function wasMainBranchPushed(context) {
+  return (
+    context.eventName === "push" &&
+    (context.ref === "refs/heads/master" || context.ref === "refs/heads/main")
+  );
+}
+
+/**
+ * Get the latest release version from GitHub.
+ * @param {typeof context} context
+ * @returns {Promise<import("semver").SemVer>}
+ */
 async function getPreviousReleaseVersion(context) {
   const octokit = new octokit__WEBPACK_IMPORTED_MODULE_3__.Octokit({ auth: process.env.GITHUB_TOKEN });
   try {
@@ -42153,7 +42167,7 @@ async function getPreviousReleaseVersion(context) {
 }
 
 /**
- *Returns the unix timestamp of the commit being built
+ * Returns the unix timestamp of the commit being built
  * @param {typeof context} context
  * @returns {Promise<string>}
  */
