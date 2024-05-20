@@ -43,7 +43,7 @@ export function findVersionBranch(context) {
     matches = context.ref.match(/refs\/heads\/v(\d+)/);
   }
   if (context.eventName === "pull_request") {
-    matches = context.base.ref.match(/refs\/heads\/v(\d+)/);
+    matches = context.payload.base?.ref?.match(/refs\/heads\/v(\d+)/);
   }
   if (matches !== null) {
     const parsedNum = parseInt(matches[1], 10);

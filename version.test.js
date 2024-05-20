@@ -154,7 +154,7 @@ describe("findVersionBranch", () => {
     expect(
       findVersionBranch({
         eventName: "pull_request",
-        base: { ref: "refs/heads/v2" },
+        payload: { base: { ref: "refs/heads/v2" } },
       })
     ).toBe(2);
   });
