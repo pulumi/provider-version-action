@@ -42082,6 +42082,7 @@ try {
 /* harmony export */ __nccwpck_require__.d(__webpack_exports__, {
 /* harmony export */   "x": () => (/* binding */ calculateVersion)
 /* harmony export */ });
+/* unused harmony export findVersionBranch */
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0__ = __nccwpck_require__(2186);
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__nccwpck_require__.n(_actions_core__WEBPACK_IMPORTED_MODULE_0__);
 /* harmony import */ var _actions_github__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(5438);
@@ -42122,6 +42123,28 @@ async function calculateVersion(context) {
   }
   const shortHash = context.sha.slice(0, 7);
   return `${nextVersion.version}-alpha.${timestamp}+${shortHash}`;
+}
+
+/**
+ * Check if we're building, or merging to, a version branch.
+ * @param {typeof context} context
+ * @returns {number | undefined} the major version number of the version branch.
+ */
+function findVersionBranch(context) {
+  let matches = null;
+  if (context.eventName === "push") {
+    matches = context.ref.match(/refs\/heads\/v(\d+)/);
+  }
+  if (context.eventName === "pull_request") {
+    matches = context.base.ref.match(/refs\/heads\/v(\d+)/);
+  }
+  if (matches !== null) {
+    const parsedNum = parseInt(matches[1], 10);
+    if (!isNaN(parsedNum)) {
+      return parsedNum;
+    }
+  }
+  return undefined;
 }
 
 /**

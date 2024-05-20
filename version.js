@@ -33,6 +33,28 @@ export async function calculateVersion(context) {
 }
 
 /**
+ * Check if we're building, or merging to, a version branch.
+ * @param {typeof context} context
+ * @returns {number | undefined} the major version number of the version branch.
+ */
+export function findVersionBranch(context) {
+  let matches = null;
+  if (context.eventName === "push") {
+    matches = context.ref.match(/refs\/heads\/v(\d+)/);
+  }
+  if (context.eventName === "pull_request") {
+    matches = context.base.ref.match(/refs\/heads\/v(\d+)/);
+  }
+  if (matches !== null) {
+    const parsedNum = parseInt(matches[1], 10);
+    if (!isNaN(parsedNum)) {
+      return parsedNum;
+    }
+  }
+  return undefined;
+}
+
+/**
  * Returns true if the main branch was pushed.
  * @param {typeof context} context
  * @returns {boolean}

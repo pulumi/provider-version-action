@@ -1,4 +1,4 @@
-import { calculateVersion } from "./version";
+import { calculateVersion, findVersionBranch } from "./version";
 
 beforeEach(() => {
   fetch.resetMocks();
@@ -131,4 +131,39 @@ test("PR build", async () => {
       },
     })
   ).toBe("1.3.0-alpha.1577836800+699a10d");
+});
+
+describe("findVersionBranch", () => {
+  test("v1 branch", () => {
+    expect(
+      findVersionBranch({
+        eventName: "push",
+        ref: "refs/heads/v1",
+      })
+    ).toBe(1);
+  });
+  test("v2 branch", () => {
+    expect(
+      findVersionBranch({
+        eventName: "push",
+        ref: "refs/heads/v2",
+      })
+    ).toBe(2);
+  });
+  test("v2 PR", () => {
+    expect(
+      findVersionBranch({
+        eventName: "pull_request",
+        base: { ref: "refs/heads/v2" },
+      })
+    ).toBe(2);
+  });
+  test("invalid branch", () => {
+    expect(
+      findVersionBranch({
+        eventName: "push",
+        ref: "refs/heads/foo",
+      })
+    ).toBe(undefined);
+  });
 });
