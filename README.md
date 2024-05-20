@@ -76,6 +76,15 @@ This action supports 3 build scenarios:
 2. Pushing to a main branch. An alpha version will be generated e.g. `1.2.3-alpha.1577836800`
 3. Building a pull request. An alpha version will be generated, with a shorthash suffix e.g. `1.2.3-alpha.1577836800+699a10d`
 
+### Major Versions
+
+When we're wanting to build for a different major version from the last release, we can do this using two methods:
+
+1. Use a version branch containing just the major version number e.g. (`v1` or `v7`). Pushing to this branch, or opening a pull request with this branch as the "base" will use this major version.
+2. Add the label `needs-release/major` to a pull request. This will cause the version number to be incremented by a major increment instead of a minor increment. The major increment will be used when building the PR and when building the commit after being merged.
+
+Note: if the `needs-release/major` label is used on a version branch, the label will be ignored and the version branch used.
+
 ## Alpha Version Format
 
 When building a branch or a pull-request, an alpha version will be generated with the following features:
