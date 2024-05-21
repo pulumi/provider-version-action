@@ -25,7 +25,7 @@ try {
     (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.exportVariable)(envVar, version);
   }
 } catch (error) {
-  (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.setFailed)(error.message);
+  (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.setFailed)(error);
 }
 
 __webpack_async_result__();
