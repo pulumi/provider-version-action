@@ -19,17 +19,85 @@ export async function calculateVersion(context) {
     }
     return parsed.version;
   }
-  // Get the latest release
-  const parsed = await getPreviousReleaseVersion(context);
-  const nextVersion = parsed.inc("minor");
+
+  const nextVersion = await calculateNextVersion(context);
+  // Add the alpha version suffix
   const timestamp = await getTimestamp(context);
   if (wasMainBranchPushed(context)) {
     // If we're building the main branch, don't include the `+{shortHash}` part as Python considers this a "local" version
     // and will not allow it to be uploaded to PyPI.
     return `${nextVersion.version}-alpha.${timestamp}`;
   }
+  // Include the short commit hash for pull-requests and other branches to ensure a unique version per commit.
+  // This is considered a "local" version by Python and is not able to be uploaded to PyPI.
   const shortHash = context.sha.slice(0, 7);
   return `${nextVersion.version}-alpha.${timestamp}+${shortHash}`;
+}
+
+/**
+ * Calculate the tentative next version to use for the current build.
+ * @param {typeof context} context
+ * @returns {Promise<import("semver").SemVer>}
+ */
+async function calculateNextVersion(context) {
+  // Check if the current or base branch is named as a version e.g. `v1`
+  const majorVersion = findVersionBranch(context);
+  if (majorVersion !== undefined) {
+    return parseSemver(`${majorVersion}.0.0`);
+  }
+  // Look up the release marked as latest on GitHub.
+  const previousRelease = await getLatestReleaseVersion(context);
+  // Check if we should increment the major version based on PR labels.
+  if (await shouldIncrementMajor(context)) {
+    return previousRelease.inc("major");
+  }
+  // Assume the next version will be a minor increment.
+  return previousRelease.inc("minor");
+}
+
+/**
+ * Checks the PR to see if the major version should be incremented based on labels.
+ * @param {typeof context} context
+ */
+async function shouldIncrementMajor(context) {
+  if (context.eventName === "pull_request") {
+    return hasNeedsMajorReleaseLabel(context.payload?.pull_request?.labels);
+  }
+  if (context.eventName === "push") {
+    try {
+      const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+      const commit = await octokit.rest.repos.getCommit({
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        ref: context.sha,
+      });
+      const prMatch = commit.data.commit.message.match(/\(#(\d+)\)/);
+      if (prMatch !== null) {
+        const prNumber = parseInt(prMatch[1], 10);
+        const pr = await octokit.rest.pulls.get({
+          owner: context.repo.owner,
+          repo: context.repo.repo,
+          pull_number: prNumber,
+        });
+        return hasNeedsMajorReleaseLabel(pr.data.labels);
+      }
+    } catch (error) {
+      warning(`Failed to get commit details: ${error.toString()}`);
+      return false;
+    }
+  }
+  return false;
+}
+
+/**
+ * @param {{ name: string }[] | undefined} labels
+ * @returns {boolean}
+ */
+function hasNeedsMajorReleaseLabel(labels) {
+  if (!labels) {
+    return false;
+  }
+  return labels.some((label) => label.name === "needs-release/major");
 }
 
 /**
@@ -71,7 +139,7 @@ function wasMainBranchPushed(context) {
  * @param {typeof context} context
  * @returns {Promise<import("semver").SemVer>}
  */
-async function getPreviousReleaseVersion(context) {
+async function getLatestReleaseVersion(context) {
   const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
   try {
     const response = await octokit.rest.repos.getLatestRelease({

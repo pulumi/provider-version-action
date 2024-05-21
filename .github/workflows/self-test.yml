@@ -30,15 +30,4 @@ jobs:
       - run: npm run build
 
       - name: Check git status
-        id: git-status
-        shell: bash
-        run: echo "STATUS=$(git status -s)" >> ${GITHUB_OUTPUT}
-
-      - name: Fail if work-tree not clean
-        if: steps.git-status.STATUS != ''
-        shell: bash
-        run: |
-          echo "${{ steps.git-status.STATUS }}"
-          git diff | head -20
-          exit 1
-        continue-on-error: true
+        uses: pulumi/git-status-check-action@v1
