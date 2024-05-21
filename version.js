@@ -1,4 +1,4 @@
-import { warning } from "@actions/core";
+import { warning, debug } from "@actions/core";
 import { context } from "@actions/github";
 import { parse as parseSemver } from "semver";
 import { Octokit } from "octokit";
@@ -11,8 +11,10 @@ import { Octokit } from "octokit";
 export async function calculateVersion(context) {
   // Are we building a tagged release?
   if (context.eventName === "push" && context.ref.startsWith("refs/tags/v")) {
+    debug(`Tag pushed: ${context.ref}`);
     // Get the version from the tag
     const version = context.ref.replace("refs/tags/", "");
+    debug(`Extracted version: ${version}`);
     const parsed = parseSemver(version); // Ensure it's a valid semver version
     if (parsed === null) {
       throw new Error(`Invalid tag version: ${version}`);
@@ -20,7 +22,9 @@ export async function calculateVersion(context) {
     return parsed.version;
   }
 
+  debug(`Building branch or PR: ${context.eventName} ${context.ref}`);
   const nextVersion = await calculateNextVersion(context);
+  debug(`Next version: ${nextVersion.version}`);
   // Add the alpha version suffix
   const timestamp = await getTimestamp(context);
   if (wasMainBranchPushed(context)) {
@@ -43,12 +47,15 @@ async function calculateNextVersion(context) {
   // Check if the current or base branch is named as a version e.g. `v1`
   const majorVersion = findVersionBranch(context);
   if (majorVersion !== undefined) {
+    debug(`Using major version from branch: v${majorVersion}`);
     return parseSemver(`${majorVersion}.0.0`);
   }
   // Look up the release marked as latest on GitHub.
   const previousRelease = await getLatestReleaseVersion(context);
+  debug(`Latest release: ${previousRelease.version}`);
   // Check if we should increment the major version based on PR labels.
   if (await shouldIncrementMajor(context)) {
+    debug("Incrementing major version based on PR labels");
     return previousRelease.inc("major");
   }
   // Assume the next version will be a minor increment.
@@ -61,19 +68,27 @@ async function calculateNextVersion(context) {
  */
 async function shouldIncrementMajor(context) {
   if (context.eventName === "pull_request") {
-    return hasNeedsMajorReleaseLabel(context.payload?.pull_request?.labels);
+    const labels = context.payload?.pull_request?.labels;
+    if (!labels) {
+      debug(`No labels found on PR: ${context.payload}`);
+      return false;
+    }
+    return hasNeedsMajorReleaseLabel(labels);
   }
   if (context.eventName === "push") {
     try {
       const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+      debug("Checking commit for PR reference");
       const commit = await octokit.rest.repos.getCommit({
         owner: context.repo.owner,
         repo: context.repo.repo,
         ref: context.sha,
       });
-      const prMatch = commit.data.commit.message.match(/\(#(\d+)\)/);
-      if (prMatch !== null) {
+      debug(`Commit message: ${commit.data?.commit?.message}`);
+      const prMatch = commit.data?.commit?.message?.match(/\(#(\d+)\)/);
+      if (prMatch) {
         const prNumber = parseInt(prMatch[1], 10);
+        debug(`Found PR reference: #${prNumber}`);
         const pr = await octokit.rest.pulls.get({
           owner: context.repo.owner,
           repo: context.repo.repo,
@@ -97,6 +112,7 @@ function hasNeedsMajorReleaseLabel(labels) {
   if (!labels) {
     return false;
   }
+  debug(`PR labels: ${labels.map((label) => label.name).join(", ")}`);
   return labels.some((label) => label.name === "needs-release/major");
 }
 
@@ -111,9 +127,9 @@ export function findVersionBranch(context) {
     matches = context.ref.match(/refs\/heads\/v(\d+)/);
   }
   if (context.eventName === "pull_request") {
-    matches = context.payload.base?.ref?.match(/refs\/heads\/v(\d+)/);
+    matches = context.payload?.base?.ref?.match(/refs\/heads\/v(\d+)/);
   }
-  if (matches !== null) {
+  if (matches) {
     const parsedNum = parseInt(matches[1], 10);
     if (!isNaN(parsedNum)) {
       return parsedNum;

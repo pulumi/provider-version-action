@@ -42104,8 +42104,10 @@ try {
 async function calculateVersion(context) {
   // Are we building a tagged release?
   if (context.eventName === "push" && context.ref.startsWith("refs/tags/v")) {
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`Tag pushed: ${context.ref}`);
     // Get the version from the tag
     const version = context.ref.replace("refs/tags/", "");
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`Extracted version: ${version}`);
     const parsed = (0,semver__WEBPACK_IMPORTED_MODULE_2__.parse)(version); // Ensure it's a valid semver version
     if (parsed === null) {
       throw new Error(`Invalid tag version: ${version}`);
@@ -42113,7 +42115,9 @@ async function calculateVersion(context) {
     return parsed.version;
   }
 
+  (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`Building branch or PR: ${context.eventName} ${context.ref}`);
   const nextVersion = await calculateNextVersion(context);
+  (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`Next version: ${nextVersion.version}`);
   // Add the alpha version suffix
   const timestamp = await getTimestamp(context);
   if (wasMainBranchPushed(context)) {
@@ -42136,12 +42140,15 @@ async function calculateNextVersion(context) {
   // Check if the current or base branch is named as a version e.g. `v1`
   const majorVersion = findVersionBranch(context);
   if (majorVersion !== undefined) {
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`Using major version from branch: v${majorVersion}`);
     return (0,semver__WEBPACK_IMPORTED_MODULE_2__.parse)(`${majorVersion}.0.0`);
   }
   // Look up the release marked as latest on GitHub.
   const previousRelease = await getLatestReleaseVersion(context);
+  (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`Latest release: ${previousRelease.version}`);
   // Check if we should increment the major version based on PR labels.
   if (await shouldIncrementMajor(context)) {
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)("Incrementing major version based on PR labels");
     return previousRelease.inc("major");
   }
   // Assume the next version will be a minor increment.
@@ -42154,19 +42161,27 @@ async function calculateNextVersion(context) {
  */
 async function shouldIncrementMajor(context) {
   if (context.eventName === "pull_request") {
-    return hasNeedsMajorReleaseLabel(context.payload?.pull_request?.labels);
+    const labels = context.payload?.pull_request?.labels;
+    if (!labels) {
+      (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`No labels found on PR: ${context.payload}`);
+      return false;
+    }
+    return hasNeedsMajorReleaseLabel(labels);
   }
   if (context.eventName === "push") {
     try {
       const octokit = new octokit__WEBPACK_IMPORTED_MODULE_3__.Octokit({ auth: process.env.GITHUB_TOKEN });
+      (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)("Checking commit for PR reference");
       const commit = await octokit.rest.repos.getCommit({
         owner: context.repo.owner,
         repo: context.repo.repo,
         ref: context.sha,
       });
-      const prMatch = commit.data.commit.message.match(/\(#(\d+)\)/);
-      if (prMatch !== null) {
+      (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`Commit message: ${commit.data?.commit?.message}`);
+      const prMatch = commit.data?.commit?.message?.match(/\(#(\d+)\)/);
+      if (prMatch) {
         const prNumber = parseInt(prMatch[1], 10);
+        (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`Found PR reference: #${prNumber}`);
         const pr = await octokit.rest.pulls.get({
           owner: context.repo.owner,
           repo: context.repo.repo,
@@ -42190,6 +42205,7 @@ function hasNeedsMajorReleaseLabel(labels) {
   if (!labels) {
     return false;
   }
+  (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`PR labels: ${labels.map((label) => label.name).join(", ")}`);
   return labels.some((label) => label.name === "needs-release/major");
 }
 
@@ -42204,9 +42220,9 @@ function findVersionBranch(context) {
     matches = context.ref.match(/refs\/heads\/v(\d+)/);
   }
   if (context.eventName === "pull_request") {
-    matches = context.payload.base?.ref?.match(/refs\/heads\/v(\d+)/);
+    matches = context.payload?.base?.ref?.match(/refs\/heads\/v(\d+)/);
   }
-  if (matches !== null) {
+  if (matches) {
     const parsedNum = parseInt(matches[1], 10);
     if (!isNaN(parsedNum)) {
       return parsedNum;
