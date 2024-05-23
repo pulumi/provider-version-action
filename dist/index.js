@@ -42096,6 +42096,10 @@ try {
 
 
 
+// Only write debug messages when the RUNNER_DEBUG environment variable is set.
+// This reduces noise in tests.
+const localDebug = (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.isDebug)() ? _actions_core__WEBPACK_IMPORTED_MODULE_0__.debug : () => {};
+
 /**
  * Calculate the version to use for the current build.
  * @param {any} fetch
@@ -42106,55 +42110,62 @@ async function calculateVersion(context) {
   const ref = context.ref;
   const sha = context.sha;
   const defaultBranch = context.payload?.repository?.default_branch;
-  // push events only
-  const headCommitTimestamp = context.payload?.head_commit?.timestamp;
-  const headCommitMessage = context.payload?.head_commit?.message;
-  // pull_request events only
-  const baseRef = context.payload?.pull_request?.base?.ref;
-  const prLabels = context.payload?.pull_request?.labels;
 
-  if ((0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.isDebug)()) {
-    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`Event name: ${eventName}`);
-    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`Ref: ${ref}`);
-    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`SHA: ${sha}`);
-    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`repository.default_branch: ${defaultBranch}`);
-    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`head_commit.timestamp: ${headCommitTimestamp}`);
-    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`head_commit.message: ${headCommitMessage}`);
-    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`pull_request.base.ref: ${baseRef}`);
-    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`pull_request.labels: ${JSON.stringify(prLabels)}`);
-  }
-  // Are we building a tagged release?
+  localDebug(`event_name: ${eventName}`);
+  localDebug(`ref: ${ref}`);
+  localDebug(`sha: ${sha}`);
+  localDebug(`repository.default_branch: ${defaultBranch}`);
+
   if (eventName === "push" && ref.startsWith("refs/tags/")) {
-    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`Tag pushed: ${ref}`);
+    localDebug(`Tag pushed: ${ref}`);
     return calculateTagVersion(ref);
   }
 
   if (eventName === "push" && ref.startsWith("refs/heads/")) {
+    // push events only
+    const headCommitTimestamp = context.payload?.head_commit?.timestamp;
+    const headCommitMessage = context.payload?.head_commit?.message;
+    localDebug(`head_commit.timestamp: ${headCommitTimestamp}`);
+    localDebug(`head_commit.message: ${headCommitMessage}`);
+
     const branchName = ref.replace("refs/heads/", "");
     const asVersion = tryParseVersionBranch(branchName);
     if (asVersion !== undefined) {
-      (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`Version branch pushed: ${branchName}`);
+      localDebug(`Version branch pushed: ${branchName}`);
       const baseVersion = new semver__WEBPACK_IMPORTED_MODULE_2__.SemVer(`${asVersion}.0.0`);
       return alphaVersion(baseVersion, headCommitTimestamp);
     }
     if (branchName === defaultBranch) {
-      (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`Default branch pushed: ${defaultBranch}`);
+      localDebug(`Default branch pushed: ${defaultBranch}`);
       const previousRelease = await getLatestReleaseVersion(context.repo);
       const increment = await getIncrementType(headCommitMessage);
       const nextVersion = previousRelease.inc(increment);
       return alphaVersion(nextVersion, headCommitTimestamp);
     }
-    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`Branch pushed: ${branchName}`);
+    localDebug(`Branch pushed: ${branchName}`);
     const previousRelease = await getLatestReleaseVersion(context.repo);
     const nextVersion = previousRelease.inc("minor");
     return localAlphaVersion(nextVersion, headCommitTimestamp, sha);
   }
 
   if (eventName === "pull_request") {
-    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`PR pushed: ${context.eventName} ${context.ref}`);
-    const previousRelease = await getLatestReleaseVersion(context.repo);
-    const increment = getIncrementTypeFromLabels(prLabels);
-    const nextVersion = previousRelease.inc(increment);
+    // pull_request events only
+    const baseRef = context.payload?.pull_request?.base?.ref;
+    const prLabels = context.payload?.pull_request?.labels;
+    localDebug(`PR pushed: ${context.eventName} ${context.ref}`);
+    localDebug(`pull_request.base.ref: ${baseRef}`);
+    localDebug(`pull_request.labels: ${JSON.stringify(prLabels)}`);
+
+    const asVersion = tryParseVersionBranch(baseRef);
+    let nextVersion;
+    if (asVersion !== undefined) {
+      localDebug(`Version branch PR: ${baseRef}`);
+      nextVersion = new semver__WEBPACK_IMPORTED_MODULE_2__.SemVer(`${asVersion}.0.0`);
+    } else {
+      const previousRelease = await getLatestReleaseVersion(context.repo);
+      const increment = getIncrementTypeFromLabels(prLabels);
+      nextVersion = previousRelease.inc(increment);
+    }
     const timestamp = await getCommitTimestamp(context.repo, sha);
     const shortHash = context.sha.slice(0, 7);
     return `${nextVersion.version}-alpha.${timestamp}+${shortHash}`;
@@ -42191,7 +42202,7 @@ function localAlphaVersion(baseVersion, timestamp, sha) {
 function calculateTagVersion(ref) {
   // Get the version from the tag
   const tag = ref.replace("refs/tags/", "");
-  (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`tag: ${tag}`);
+  localDebug(`tag: ${tag}`);
   // Ensure it's a valid semver version
   const parsed = new semver__WEBPACK_IMPORTED_MODULE_2__.SemVer(tag);
   return parsed.version;
@@ -42274,7 +42285,7 @@ function hasNeedsMajorReleaseLabel(labels) {
   if (!labels) {
     return false;
   }
-  (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`PR labels: ${labels.map((label) => label.name).join(", ")}`);
+  localDebug(`PR labels: ${labels.map((label) => label.name).join(", ")}`);
   return labels.some((label) => label.name === "needs-release/major");
 }
 
@@ -42314,10 +42325,10 @@ async function getLatestReleaseVersion(repo) {
     });
     const latestTag = response?.data?.tag_name;
     if (latestTag === undefined) {
-      (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.warning)("Could not find latest release tag");
+      localDebug("No latest release found, using 0.0.0 as the base version.");
       return new semver__WEBPACK_IMPORTED_MODULE_2__.SemVer("0.0.0");
     }
-    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`Latest release tag: ${latestTag}`);
+    localDebug(`Latest release tag: ${latestTag}`);
     const parsed = new semver__WEBPACK_IMPORTED_MODULE_2__.SemVer(latestTag); // Ensure it's a valid semver version
     if (parsed === null) {
       (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.warning)(`Latest release tag is an invalid semver version: ${latestTag}`);

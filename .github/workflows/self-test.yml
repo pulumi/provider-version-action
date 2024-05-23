@@ -8,7 +8,7 @@ jobs:
   self-test:
     runs-on: ubuntu-latest
     env:
-      ACTIONS_STEP_DEBUG: true
+      RUNNER_DEBUG: true
     steps:
       - uses: actions/checkout@v4
       - name: Dump context
