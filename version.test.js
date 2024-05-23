@@ -21,7 +21,7 @@ describe("Tag pushed", () => {
         eventName: "push",
         ref: "refs/tags/v1.foo",
       })
-    ).rejects.toThrow("Invalid tag version: v1.foo");
+    ).rejects.toThrow("Invalid Version: v1.foo");
   });
 });
 
@@ -29,12 +29,6 @@ describe("main/master branch pushed", () => {
   test("with previous release", async () => {
     mockGitHubEndpoints({
       "repos/owner/repo/releases/latest": { tag_name: "v1.0.0" },
-      "repos/owner/repo/commits/699a10d86efd595503aa8c3ecfff753a7ed3cbd4": {
-        commit: {
-          message: "Commit message",
-          committer: { date: "2020-01-01T00:00:00Z" },
-        },
-      },
     });
 
     expect(
@@ -45,6 +39,13 @@ describe("main/master branch pushed", () => {
         repo: {
           owner: "owner",
           repo: "repo",
+        },
+        payload: {
+          repository: { default_branch: "master" },
+          head_commit: {
+            message: "Commit message",
+            timestamp: "2020-01-01T00:00:00Z",
+          },
         },
       })
     ).toBe("1.1.0-alpha.1577836800");
@@ -54,12 +55,6 @@ describe("main/master branch pushed", () => {
     mockGitHubEndpoints({
       // Make release not found
       "repos/owner/repo/releases/latest": null,
-      "repos/owner/repo/commits/699a10d86efd595503aa8c3ecfff753a7ed3cbd4": {
-        commit: {
-          message: "Commit message",
-          committer: { date: "2020-01-01T00:00:00Z" },
-        },
-      },
     });
 
     expect(
@@ -70,30 +65,40 @@ describe("main/master branch pushed", () => {
         repo: {
           owner: "owner",
           repo: "repo",
+        },
+        payload: {
+          repository: { default_branch: "master" },
+          head_commit: {
+            message: "Commit message",
+            timestamp: "2020-01-01T00:00:00Z",
+          },
         },
       })
     ).toBe("0.1.0-alpha.1577836800");
   });
+});
 
-  test("failure to fetch commit falls back to runId", async () => {
-    mockGitHubEndpoints({
-      "repos/owner/repo/releases/latest": { tag_name: "v1.0.0" },
-      // Make commit not found
-      "repos/owner/repo/commits/699a10d86efd595503aa8c3ecfff753a7ed3cbd4": null,
-    });
+describe("Version branch pushed", () => {
+  test("with previous release", async () => {
+    mockGitHubEndpoints({});
 
     expect(
       await calculateVersion({
         eventName: "push",
         sha: "699a10d86efd595503aa8c3ecfff753a7ed3cbd4",
-        runId: 1234,
-        ref: "refs/heads/master",
+        ref: "refs/heads/v2",
         repo: {
           owner: "owner",
           repo: "repo",
         },
+        payload: {
+          head_commit: {
+            message: "Commit message",
+            timestamp: "2020-01-01T00:00:00Z",
+          },
+        },
       })
-    ).toBe("1.1.0-alpha.1234");
+    ).toBe("2.0.0-alpha.1577836800");
   });
 });
 

@@ -42102,99 +42102,168 @@ try {
  * @param {typeof context} context
  */
 async function calculateVersion(context) {
+  const eventName = context.eventName;
+  const ref = context.ref;
+  const sha = context.sha;
+  const defaultBranch = context.payload?.repository?.default_branch;
+  // push events only
+  const headCommitTimestamp = context.payload?.head_commit?.timestamp;
+  const headCommitMessage = context.payload?.head_commit?.message;
+  // pull_request events only
+  const baseRef = context.payload?.pull_request?.base?.ref;
+  const prLabels = context.payload?.pull_request?.labels;
+
+  if ((0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.isDebug)()) {
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`Event name: ${eventName}`);
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`Ref: ${ref}`);
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`SHA: ${sha}`);
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`repository.default_branch: ${defaultBranch}`);
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`head_commit.timestamp: ${headCommitTimestamp}`);
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`head_commit.message: ${headCommitMessage}`);
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`pull_request.base.ref: ${baseRef}`);
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`pull_request.labels: ${JSON.stringify(prLabels)}`);
+  }
   // Are we building a tagged release?
-  if (context.eventName === "push" && context.ref.startsWith("refs/tags/v")) {
-    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`Tag pushed: ${context.ref}`);
-    // Get the version from the tag
-    const version = context.ref.replace("refs/tags/", "");
-    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`Extracted version: ${version}`);
-    const parsed = (0,semver__WEBPACK_IMPORTED_MODULE_2__.parse)(version); // Ensure it's a valid semver version
-    if (parsed === null) {
-      throw new Error(`Invalid tag version: ${version}`);
-    }
-    return parsed.version;
+  if (eventName === "push" && ref.startsWith("refs/tags/")) {
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`Tag pushed: ${ref}`);
+    return calculateTagVersion(ref);
   }
 
-  (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`Building branch or PR: ${context.eventName} ${context.ref}`);
-  const nextVersion = await calculateNextVersion(context);
-  (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`Next version: ${nextVersion.version}`);
-  // Add the alpha version suffix
-  const timestamp = await getTimestamp(context);
-  if (wasMainBranchPushed(context)) {
-    // If we're building the main branch, don't include the `+{shortHash}` part as Python considers this a "local" version
-    // and will not allow it to be uploaded to PyPI.
-    return `${nextVersion.version}-alpha.${timestamp}`;
+  if (eventName === "push" && ref.startsWith("refs/heads/")) {
+    const branchName = ref.replace("refs/heads/", "");
+    const asVersion = tryParseVersionBranch(branchName);
+    if (asVersion !== undefined) {
+      (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`Version branch pushed: ${branchName}`);
+      const baseVersion = new semver__WEBPACK_IMPORTED_MODULE_2__.SemVer(`${asVersion}.0.0`);
+      return alphaVersion(baseVersion, headCommitTimestamp);
+    }
+    if (branchName === defaultBranch) {
+      (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`Default branch pushed: ${defaultBranch}`);
+      const previousRelease = await getLatestReleaseVersion(context.repo);
+      const increment = await getIncrementType(headCommitMessage);
+      const nextVersion = previousRelease.inc(increment);
+      return alphaVersion(nextVersion, headCommitTimestamp);
+    }
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`Branch pushed: ${branchName}`);
+    const previousRelease = await getLatestReleaseVersion(context.repo);
+    const nextVersion = previousRelease.inc("minor");
+    return localAlphaVersion(nextVersion, headCommitTimestamp, sha);
   }
-  // Include the short commit hash for pull-requests and other branches to ensure a unique version per commit.
-  // This is considered a "local" version by Python and is not able to be uploaded to PyPI.
-  const shortHash = context.sha.slice(0, 7);
-  return `${nextVersion.version}-alpha.${timestamp}+${shortHash}`;
+
+  if (eventName === "pull_request") {
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`PR pushed: ${context.eventName} ${context.ref}`);
+    const previousRelease = await getLatestReleaseVersion(context.repo);
+    const increment = getIncrementTypeFromLabels(prLabels);
+    const nextVersion = previousRelease.inc(increment);
+    const timestamp = await getCommitTimestamp(context.repo, sha);
+    const shortHash = context.sha.slice(0, 7);
+    return `${nextVersion.version}-alpha.${timestamp}+${shortHash}`;
+  }
+
+  throw new Error(`Unsupported event: ${eventName}`);
 }
 
 /**
- * Calculate the tentative next version to use for the current build.
- * @param {typeof context} context
- * @returns {Promise<import("semver").SemVer>}
+ * @param {SemVer} baseVersion
+ * @param {string} timestamp
+ * @returns {string}
  */
-async function calculateNextVersion(context) {
-  // Check if the current or base branch is named as a version e.g. `v1`
-  const majorVersion = findVersionBranch(context);
-  if (majorVersion !== undefined) {
-    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`Using major version from branch: v${majorVersion}`);
-    return (0,semver__WEBPACK_IMPORTED_MODULE_2__.parse)(`${majorVersion}.0.0`);
+function alphaVersion(baseVersion, timestamp) {
+  // Include the short commit hash for pull-requests and other branches to ensure a unique version per commit.
+  // This is considered a "local" version by Python and is not able to be uploaded to PyPI.
+  return `${baseVersion}-alpha.${timestampToUnix(timestamp)}`;
+}
+
+/**
+ * @param {string} baseVersion
+ * @param {string} timestamp
+ * @param {string} sha
+ * @returns {string}
+ */
+function localAlphaVersion(baseVersion, timestamp, sha) {
+  return `${baseVersion}-alpha.${timestampToUnix(timestamp)}+${shortHash(sha)}`;
+}
+
+/**
+ * @param {string} ref
+ * @returns {string}
+ */
+function calculateTagVersion(ref) {
+  // Get the version from the tag
+  const tag = ref.replace("refs/tags/", "");
+  (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`tag: ${tag}`);
+  // Ensure it's a valid semver version
+  const parsed = new semver__WEBPACK_IMPORTED_MODULE_2__.SemVer(tag);
+  return parsed.version;
+}
+
+/**
+ * @param {string} branchName
+ * @returns {number | undefined}
+ */
+function tryParseVersionBranch(branchName) {
+  const match = branchName.match(/^v(\d+)$/);
+  if (match) {
+    const version = parseInt(match[1], 10);
+    if (!isNaN(version)) {
+      return version;
+    }
   }
-  // Look up the release marked as latest on GitHub.
-  const previousRelease = await getLatestReleaseVersion(context);
-  (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`Latest release: ${previousRelease.version}`);
-  // Check if we should increment the major version based on PR labels.
-  if (await shouldIncrementMajor(context)) {
-    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)("Incrementing major version based on PR labels");
-    return previousRelease.inc("major");
-  }
-  // Assume the next version will be a minor increment.
-  return previousRelease.inc("minor");
+  return undefined;
 }
 
 /**
  * Checks the PR to see if the major version should be incremented based on labels.
- * @param {typeof context} context
+ * @param {string} commitMessage
+ * @returns {Promise<'minor' | 'major'>}
  */
-async function shouldIncrementMajor(context) {
-  if (context.eventName === "pull_request") {
-    const labels = context.payload?.pull_request?.labels;
-    if (!labels) {
-      (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`No labels found on PR: ${context.payload}`);
-      return false;
-    }
-    return hasNeedsMajorReleaseLabel(labels);
+async function getIncrementType(commitMessage) {
+  const prNumber = tryParsePrNumber(commitMessage);
+  if (prNumber === undefined) {
+    return "minor";
   }
-  if (context.eventName === "push") {
-    try {
-      const octokit = new octokit__WEBPACK_IMPORTED_MODULE_3__.Octokit({ auth: process.env.GITHUB_TOKEN });
-      (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)("Checking commit for PR reference");
-      const commit = await octokit.rest.repos.getCommit({
-        owner: context.repo.owner,
-        repo: context.repo.repo,
-        ref: context.sha,
-      });
-      (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`Commit message: ${commit.data?.commit?.message}`);
-      const prMatch = commit.data?.commit?.message?.match(/\(#(\d+)\)/);
-      if (prMatch) {
-        const prNumber = parseInt(prMatch[1], 10);
-        (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`Found PR reference: #${prNumber}`);
-        const pr = await octokit.rest.pulls.get({
-          owner: context.repo.owner,
-          repo: context.repo.repo,
-          pull_number: prNumber,
-        });
-        return hasNeedsMajorReleaseLabel(pr.data.labels);
-      }
-    } catch (error) {
-      (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.warning)(`Failed to get commit details: ${error.toString()}`);
-      return false;
+  const labels = await findAssociatedPrLabels(_actions_github__WEBPACK_IMPORTED_MODULE_1__.context.repo, prNumber);
+  return getIncrementTypeFromLabels(labels);
+}
+
+/**
+ * @param {{ name: string }[] | undefined} labels
+ * @returns {'minor' | 'major'}
+ */
+function getIncrementTypeFromLabels(labels) {
+  if (hasNeedsMajorReleaseLabel(labels)) {
+    return "major";
+  }
+  return "minor";
+}
+
+/**
+ * @param {string} commitMessage
+ * @returns {number | undefined}
+ */
+function tryParsePrNumber(commitMessage) {
+  const prMatch = commitMessage.match(/\(#(\d+)\)/);
+  if (prMatch) {
+    const num = parseInt(prMatch[1], 10);
+    if (!isNaN(num)) {
+      return num;
     }
   }
-  return false;
+  return undefined;
+}
+
+/**
+ * @param {{ owner:string, repo: string }} repo
+ * @param {number} prNumber
+ * @returns {Promise<{ name: string }[] | undefined>}
+ */
+async function findAssociatedPrLabels(repo, prNumber) {
+  const octokit = new octokit__WEBPACK_IMPORTED_MODULE_3__.Octokit({ auth: process.env.GITHUB_TOKEN });
+  const pr = await octokit.rest.pulls.get({
+    ...repo,
+    pull_number: prNumber,
+  });
+  return pr.data?.labels;
 }
 
 /**
@@ -42232,76 +42301,75 @@ function findVersionBranch(context) {
 }
 
 /**
- * Returns true if the main branch was pushed.
- * @param {typeof context} context
- * @returns {boolean}
- */
-function wasMainBranchPushed(context) {
-  return (
-    context.eventName === "push" &&
-    (context.ref === "refs/heads/master" || context.ref === "refs/heads/main")
-  );
-}
-
-/**
  * Get the latest release version from GitHub.
- * @param {typeof context} context
- * @returns {Promise<import("semver").SemVer>}
+ * @param {{ owner: string, repo: string}} repo
+ * @returns {Promise<SemVer>}
  */
-async function getLatestReleaseVersion(context) {
+async function getLatestReleaseVersion(repo) {
   const octokit = new octokit__WEBPACK_IMPORTED_MODULE_3__.Octokit({ auth: process.env.GITHUB_TOKEN });
   try {
     const response = await octokit.rest.repos.getLatestRelease({
-      owner: context.repo.owner,
-      repo: context.repo.repo,
+      owner: repo.owner,
+      repo: repo.repo,
     });
     const latestTag = response?.data?.tag_name;
     if (latestTag === undefined) {
       (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.warning)("Could not find latest release tag");
-      return (0,semver__WEBPACK_IMPORTED_MODULE_2__.parse)("0.0.0");
+      return new semver__WEBPACK_IMPORTED_MODULE_2__.SemVer("0.0.0");
     }
-    const parsed = (0,semver__WEBPACK_IMPORTED_MODULE_2__.parse)(latestTag); // Ensure it's a valid semver version
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`Latest release tag: ${latestTag}`);
+    const parsed = new semver__WEBPACK_IMPORTED_MODULE_2__.SemVer(latestTag); // Ensure it's a valid semver version
     if (parsed === null) {
       (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.warning)(`Latest release tag is an invalid semver version: ${latestTag}`);
-      return (0,semver__WEBPACK_IMPORTED_MODULE_2__.parse)("0.0.0");
+      return new semver__WEBPACK_IMPORTED_MODULE_2__.SemVer("0.0.0");
     }
     return parsed;
   } catch (error) {
     // Prefer always returning some kind of version so we don't break builds due to network issues or unexpected release formats.
     (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.warning)(`Failed to get latest release: ${error.toString()}`);
-    return (0,semver__WEBPACK_IMPORTED_MODULE_2__.parse)("0.0.0");
+    return new semver__WEBPACK_IMPORTED_MODULE_2__.SemVer("0.0.0");
   }
 }
 
 /**
  * Returns the unix timestamp of the commit being built
  * @param {typeof context} context
- * @returns {Promise<string>}
+ * @returns {Promise<number>}
  */
-async function getTimestamp(context) {
-  try {
-    const octokit = new octokit__WEBPACK_IMPORTED_MODULE_3__.Octokit({ auth: process.env.GITHUB_TOKEN });
-    const currentCommit = await octokit.rest.repos.getCommit({
-      owner: context.repo.owner,
-      repo: context.repo.repo,
-      ref: context.sha,
-    });
-    const commitDate = currentCommit?.data?.commit?.committer?.date;
-    const date = new Date(commitDate);
-    let time = date.getTime();
-    // Check if the date is valid
-    if (isNaN(time)) {
-      throw new Error(`Invalid commit date: ${commitDate}`);
-    }
-    // Remove milliseconds
-    return (time / 1000).toString();
-  } catch (error) {
-    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.warning)(
-      "Failed to get commit date, using GitHub run_id instead\n" +
-        error.toString()
-    );
-    return context.runId;
+async function getCommitTimestamp(repo, sha) {
+  const octokit = new octokit__WEBPACK_IMPORTED_MODULE_3__.Octokit({ auth: process.env.GITHUB_TOKEN });
+  const currentCommit = await octokit.rest.repos.getCommit({
+    ...repo,
+    ref: sha,
+  });
+  const commitDate = currentCommit?.data?.commit?.committer?.date;
+  if (commitDate === undefined) {
+    throw new Error("Could not find commit date");
   }
+  return timestampToUnix(commitDate);
+}
+
+/**
+ * @param {string} timestamp
+ * @returns {number}
+ */
+function timestampToUnix(timestamp) {
+  const date = new Date(timestamp);
+  let time = date.getTime();
+  // Check if the date is valid
+  if (isNaN(time)) {
+    throw new Error(`Invalid commit date: ${commitDate}`);
+  }
+  // Remove milliseconds
+  return Math.floor(date.getTime() / 1000);
+}
+
+/**
+ * @param {string} sha
+ * @returns {string}
+ */
+function shortHash(sha) {
+  return sha.slice(0, 7);
 }
 
 
