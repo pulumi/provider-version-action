@@ -38,8 +38,10 @@ export async function calculateVersion(context) {
     const branchName = ref.replace("refs/heads/", "");
     const asVersion = tryParseVersionBranch(branchName);
     if (asVersion !== undefined) {
-      localDebug(`Version branch pushed: ${branchName}`);
       const baseVersion = new SemVer(`${asVersion}.0.0`);
+      localDebug(
+        `Version branch pushed: ${branchName}, base version: ${baseVersion}`
+      );
       return alphaVersion(baseVersion, headCommitTimestamp);
     }
     if (branchName === defaultBranch) {
@@ -75,7 +77,7 @@ export async function calculateVersion(context) {
     }
     const timestamp = await getCommitTimestamp(context.repo, sha);
     const shortHash = context.sha.slice(0, 7);
-    return `${nextVersion.version}-alpha.${timestamp}+${shortHash}`;
+    return localAlphaVersion(nextVersion, timestamp, shortHash);
   }
 
   throw new Error(`Unsupported event: ${eventName}`);
@@ -89,17 +91,19 @@ export async function calculateVersion(context) {
 function alphaVersion(baseVersion, timestamp) {
   // Include the short commit hash for pull-requests and other branches to ensure a unique version per commit.
   // This is considered a "local" version by Python and is not able to be uploaded to PyPI.
-  return `${baseVersion}-alpha.${timestampToUnix(timestamp)}`;
+  return `${baseVersion.version}-alpha.${timestampToUnix(timestamp)}`;
 }
 
 /**
- * @param {string} baseVersion
+ * @param {SemVer} baseVersion
  * @param {string} timestamp
  * @param {string} sha
  * @returns {string}
  */
 function localAlphaVersion(baseVersion, timestamp, sha) {
-  return `${baseVersion}-alpha.${timestampToUnix(timestamp)}+${shortHash(sha)}`;
+  return `${baseVersion.version}-alpha.${timestampToUnix(
+    timestamp
+  )}+${shortHash(sha)}`;
 }
 
 /**
@@ -149,9 +153,20 @@ async function getIncrementType(commitMessage) {
  * @returns {'minor' | 'major'}
  */
 function getIncrementTypeFromLabels(labels) {
-  if (hasNeedsMajorReleaseLabel(labels)) {
+  if (!labels) {
+    labels = [];
+  }
+  localDebug(`PR labels: ${labels.map((label) => label.name).join(", ")}`);
+  if (labels.some((label) => label.name === "needs-release/major")) {
     return "major";
   }
+  if (labels.some((label) => label.name === "needs-release/minor")) {
+    return "minor";
+  }
+  if (labels.some((label) => label.name === "needs-release/patch")) {
+    return "patch";
+  }
+  // Default to minor as this is the most common increment type for providers.
   return "minor";
 }
 
@@ -182,40 +197,6 @@ async function findAssociatedPrLabels(repo, prNumber) {
     pull_number: prNumber,
   });
   return pr.data?.labels;
-}
-
-/**
- * @param {{ name: string }[] | undefined} labels
- * @returns {boolean}
- */
-function hasNeedsMajorReleaseLabel(labels) {
-  if (!labels) {
-    return false;
-  }
-  localDebug(`PR labels: ${labels.map((label) => label.name).join(", ")}`);
-  return labels.some((label) => label.name === "needs-release/major");
-}
-
-/**
- * Check if we're building, or merging to, a version branch.
- * @param {typeof context} context
- * @returns {number | undefined} the major version number of the version branch.
- */
-export function findVersionBranch(context) {
-  let matches = null;
-  if (context.eventName === "push") {
-    matches = context.ref.match(/refs\/heads\/v(\d+)/);
-  }
-  if (context.eventName === "pull_request") {
-    matches = context.payload?.base?.ref?.match(/refs\/heads\/v(\d+)/);
-  }
-  if (matches) {
-    const parsedNum = parseInt(matches[1], 10);
-    if (!isNaN(parsedNum)) {
-      return parsedNum;
-    }
-  }
-  return undefined;
 }
 
 /**
@@ -250,9 +231,9 @@ async function getLatestReleaseVersion(repo) {
 }
 
 /**
- * Returns the unix timestamp of the commit being built
+ * Returns the ISO timestamp of the commit being built
  * @param {typeof context} context
- * @returns {Promise<number>}
+ * @returns {Promise<string>}
  */
 async function getCommitTimestamp(repo, sha) {
   const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
@@ -264,7 +245,7 @@ async function getCommitTimestamp(repo, sha) {
   if (commitDate === undefined) {
     throw new Error("Could not find commit date");
   }
-  return timestampToUnix(commitDate);
+  return commitDate;
 }
 
 /**

@@ -181,45 +181,72 @@ describe("pull_request", () => {
         },
         payload: {
           repository: { default_branch: "main" },
-          pull_request: { base: { ref: "v2" } },
+          pull_request: { base: { ref: "v21" } },
+        },
+      })
+    ).toBe("21.0.0-alpha.1577836800+699a10d");
+  });
+
+  test("with needs-release/major label", async () => {
+    mockGitHubEndpoints({
+      "repos/owner/repo/releases/latest": { tag_name: "v1.2.1" },
+      "repos/owner/repo/commits/699a10d86efd595503aa8c3ecfff753a7ed3cbd4": {
+        commit: {
+          message: "Commit message",
+          committer: { date: "2020-01-01T00:00:00Z" },
+        },
+      },
+    });
+
+    expect(
+      await calculateVersion({
+        eventName: "pull_request",
+        sha: "699a10d86efd595503aa8c3ecfff753a7ed3cbd4",
+        ref: "refs/pull/4/merge",
+        repo: {
+          owner: "owner",
+          repo: "repo",
+        },
+        payload: {
+          repository: { default_branch: "main" },
+          pull_request: {
+            base: { ref: "main" },
+            labels: [{ name: "needs-release/major" }],
+          },
         },
       })
     ).toBe("2.0.0-alpha.1577836800+699a10d");
   });
-});
 
-describe("findVersionBranch", () => {
-  test("v1 branch", () => {
+  test("with needs-release/patch label", async () => {
+    mockGitHubEndpoints({
+      "repos/owner/repo/releases/latest": { tag_name: "v1.2.1" },
+      "repos/owner/repo/commits/699a10d86efd595503aa8c3ecfff753a7ed3cbd4": {
+        commit: {
+          message: "Commit message",
+          committer: { date: "2020-01-01T00:00:00Z" },
+        },
+      },
+    });
+
     expect(
-      findVersionBranch({
-        eventName: "push",
-        ref: "refs/heads/v1",
-      })
-    ).toBe(1);
-  });
-  test("v2 branch", () => {
-    expect(
-      findVersionBranch({
-        eventName: "push",
-        ref: "refs/heads/v2",
-      })
-    ).toBe(2);
-  });
-  test("v2 PR", () => {
-    expect(
-      findVersionBranch({
+      await calculateVersion({
         eventName: "pull_request",
-        payload: { base: { ref: "refs/heads/v2" } },
+        sha: "699a10d86efd595503aa8c3ecfff753a7ed3cbd4",
+        ref: "refs/pull/4/merge",
+        repo: {
+          owner: "owner",
+          repo: "repo",
+        },
+        payload: {
+          repository: { default_branch: "main" },
+          pull_request: {
+            base: { ref: "main" },
+            labels: [{ name: "needs-release/patch" }],
+          },
+        },
       })
-    ).toBe(2);
-  });
-  test("invalid branch", () => {
-    expect(
-      findVersionBranch({
-        eventName: "push",
-        ref: "refs/heads/foo",
-      })
-    ).toBe(undefined);
+    ).toBe("1.2.2-alpha.1577836800+699a10d");
   });
 });
 
