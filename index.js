@@ -17,5 +17,5 @@ try {
     exportVariable(envVar, version);
   }
 } catch (error) {
-  setFailed(error.message);
+  setFailed(error);
 }

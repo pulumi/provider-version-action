@@ -1,4 +1,4 @@
-import { calculateVersion } from "./version";
+import { calculateVersion, findVersionBranch } from "./version";
 
 beforeEach(() => {
   fetch.resetMocks();
@@ -6,6 +6,7 @@ beforeEach(() => {
 
 describe("Tag pushed", () => {
   test("Valid tag", async () => {
+    mockGitHubEndpoints();
     expect(
       await calculateVersion({
         eventName: "push",
@@ -14,29 +15,21 @@ describe("Tag pushed", () => {
     ).toBe("1.0.0");
   });
   test("Invalid tag", async () => {
+    mockGitHubEndpoints();
     await expect(
       calculateVersion({
         eventName: "push",
         ref: "refs/tags/v1.foo",
       })
-    ).rejects.toThrow("Invalid tag version: v1.foo");
+    ).rejects.toThrow("Invalid Version: v1.foo");
   });
 });
 
 describe("main/master branch pushed", () => {
   test("with previous release", async () => {
-    // Mock the latest release response
-    fetch.mockResponseOnce(async () => ({
-      body: JSON.stringify({ tag_name: "v1.0.0" }),
-      headers: { "content-type": "application/json" },
-    }));
-    // Mock the commit response
-    fetch.mockResponseOnce(async () => ({
-      body: JSON.stringify({
-        commit: { committer: { date: "2020-01-01T00:00:00Z" } },
-      }),
-      headers: { "content-type": "application/json" },
-    }));
+    mockGitHubEndpoints({
+      "repos/owner/repo/releases/latest": { tag_name: "v1.0.0" },
+    });
 
     expect(
       await calculateVersion({
@@ -46,24 +39,23 @@ describe("main/master branch pushed", () => {
         repo: {
           owner: "owner",
           repo: "repo",
+        },
+        payload: {
+          repository: { default_branch: "master" },
+          head_commit: {
+            message: "Commit message",
+            timestamp: "2020-01-01T00:00:00Z",
+          },
         },
       })
     ).toBe("1.1.0-alpha.1577836800");
   });
 
   test("without previous release", async () => {
-    // Mock the latest release response
-    fetch.mockResponseOnce(async () => ({
-      body: JSON.stringify(null),
-      headers: { "content-type": "application/json" },
-    }));
-    // Mock the commit response
-    fetch.mockResponseOnce(async () => ({
-      body: JSON.stringify({
-        commit: { committer: { date: "2020-01-01T00:00:00Z" } },
-      }),
-      headers: { "content-type": "application/json" },
-    }));
+    mockGitHubEndpoints({
+      // Make release not found
+      "repos/owner/repo/releases/latest": {},
+    });
 
     expect(
       await calculateVersion({
@@ -73,62 +65,209 @@ describe("main/master branch pushed", () => {
         repo: {
           owner: "owner",
           repo: "repo",
+        },
+        payload: {
+          repository: { default_branch: "master" },
+          head_commit: {
+            message: "Commit message",
+            timestamp: "2020-01-01T00:00:00Z",
+          },
         },
       })
     ).toBe("0.1.0-alpha.1577836800");
   });
+});
 
-  test("failure to fetch commit falls back to runId", async () => {
-    // Mock the latest release response
-    fetch.mockResponseOnce(async () => ({
-      body: JSON.stringify({ tag_name: "v1.0.0" }),
-      headers: { "content-type": "application/json" },
-    }));
-    // Mock the commit response
-    fetch.mockResponseOnce(async () => ({
-      body: JSON.stringify(null),
-      headers: { "content-type": "application/json" },
-    }));
+describe("Version branch pushed", () => {
+  test("with previous release", async () => {
+    mockGitHubEndpoints({});
 
     expect(
       await calculateVersion({
         eventName: "push",
         sha: "699a10d86efd595503aa8c3ecfff753a7ed3cbd4",
-        runId: 1234,
-        ref: "refs/heads/master",
+        ref: "refs/heads/v2",
         repo: {
           owner: "owner",
           repo: "repo",
         },
+        payload: {
+          repository: { default_branch: "master" },
+          head_commit: {
+            message: "Commit message",
+            timestamp: "2020-01-01T00:00:00Z",
+          },
+        },
       })
-    ).toBe("1.1.0-alpha.1234");
+    ).toBe("2.0.0-alpha.1577836800");
   });
 });
 
-// This is essentially the same as the branch push test, but with a different event name, which doesn't currently affect the behavior.
-test("PR build", async () => {
-  // Mock the latest release response
-  fetch.mockResponseOnce(async () => ({
-    body: JSON.stringify({ tag_name: "v1.2.1" }),
-    headers: { "content-type": "application/json" },
-  }));
-  // Mock the commit response
-  fetch.mockResponseOnce(async () => ({
-    body: JSON.stringify({
-      commit: { committer: { date: "2020-01-01T00:00:00Z" } },
-    }),
-    headers: { "content-type": "application/json" },
-  }));
-
-  expect(
-    await calculateVersion({
-      eventName: "pull_request",
-      sha: "699a10d86efd595503aa8c3ecfff753a7ed3cbd4",
-      ref: "refs/pull/4/merge",
-      repo: {
-        owner: "owner",
-        repo: "repo",
+describe("pull_request", () => {
+  test("to default branch", async () => {
+    mockGitHubEndpoints({
+      "repos/owner/repo/releases/latest": { tag_name: "v1.2.1" },
+      "repos/owner/repo/commits/699a10d86efd595503aa8c3ecfff753a7ed3cbd4": {
+        commit: {
+          message: "Commit message",
+          committer: { date: "2020-01-01T00:00:00Z" },
+        },
       },
-    })
-  ).toBe("1.3.0-alpha.1577836800+699a10d");
+    });
+
+    expect(
+      await calculateVersion({
+        eventName: "pull_request",
+        sha: "699a10d86efd595503aa8c3ecfff753a7ed3cbd4",
+        ref: "refs/pull/4/merge",
+        repo: {
+          owner: "owner",
+          repo: "repo",
+        },
+        payload: {
+          repository: { default_branch: "main" },
+          pull_request: { base: { ref: "main" } },
+        },
+      })
+    ).toBe("1.3.0-alpha.1577836800+699a10d");
+  });
+
+  test("without previous release", async () => {
+    mockGitHubEndpoints({
+      "repos/owner/repo/releases/latest": {},
+      "repos/owner/repo/commits/699a10d86efd595503aa8c3ecfff753a7ed3cbd4": {
+        commit: {
+          message: "Commit message",
+          committer: { date: "2020-01-01T00:00:00Z" },
+        },
+      },
+    });
+
+    expect(
+      await calculateVersion({
+        eventName: "pull_request",
+        sha: "699a10d86efd595503aa8c3ecfff753a7ed3cbd4",
+        ref: "refs/pull/4/merge",
+        repo: {
+          owner: "owner",
+          repo: "repo",
+        },
+        payload: {
+          repository: { default_branch: "main" },
+          pull_request: { base: { ref: "main" } },
+        },
+      })
+    ).toBe("0.1.0-alpha.1577836800+699a10d");
+  });
+
+  test("to version branch", async () => {
+    mockGitHubEndpoints({
+      "repos/owner/repo/commits/699a10d86efd595503aa8c3ecfff753a7ed3cbd4": {
+        commit: {
+          message: "Commit message",
+          committer: { date: "2020-01-01T00:00:00Z" },
+        },
+      },
+    });
+
+    expect(
+      await calculateVersion({
+        eventName: "pull_request",
+        sha: "699a10d86efd595503aa8c3ecfff753a7ed3cbd4",
+        ref: "refs/pull/4/merge",
+        repo: {
+          owner: "owner",
+          repo: "repo",
+        },
+        payload: {
+          repository: { default_branch: "main" },
+          pull_request: { base: { ref: "v21" } },
+        },
+      })
+    ).toBe("21.0.0-alpha.1577836800+699a10d");
+  });
+
+  test("with needs-release/major label", async () => {
+    mockGitHubEndpoints({
+      "repos/owner/repo/releases/latest": { tag_name: "v1.2.1" },
+      "repos/owner/repo/commits/699a10d86efd595503aa8c3ecfff753a7ed3cbd4": {
+        commit: {
+          message: "Commit message",
+          committer: { date: "2020-01-01T00:00:00Z" },
+        },
+      },
+    });
+
+    expect(
+      await calculateVersion({
+        eventName: "pull_request",
+        sha: "699a10d86efd595503aa8c3ecfff753a7ed3cbd4",
+        ref: "refs/pull/4/merge",
+        repo: {
+          owner: "owner",
+          repo: "repo",
+        },
+        payload: {
+          repository: { default_branch: "main" },
+          pull_request: {
+            base: { ref: "main" },
+            labels: [{ name: "needs-release/major" }],
+          },
+        },
+      })
+    ).toBe("2.0.0-alpha.1577836800+699a10d");
+  });
+
+  test("with needs-release/patch label", async () => {
+    mockGitHubEndpoints({
+      "repos/owner/repo/releases/latest": { tag_name: "v1.2.1" },
+      "repos/owner/repo/commits/699a10d86efd595503aa8c3ecfff753a7ed3cbd4": {
+        commit: {
+          message: "Commit message",
+          committer: { date: "2020-01-01T00:00:00Z" },
+        },
+      },
+    });
+
+    expect(
+      await calculateVersion({
+        eventName: "pull_request",
+        sha: "699a10d86efd595503aa8c3ecfff753a7ed3cbd4",
+        ref: "refs/pull/4/merge",
+        repo: {
+          owner: "owner",
+          repo: "repo",
+        },
+        payload: {
+          repository: { default_branch: "main" },
+          pull_request: {
+            base: { ref: "main" },
+            labels: [{ name: "needs-release/patch" }],
+          },
+        },
+      })
+    ).toBe("1.2.2-alpha.1577836800+699a10d");
+  });
 });
+
+function mockGitHubEndpoints(requests = {}) {
+  fetch.mockResponse(async (req) => {
+    const url = req.url;
+    if (!url.startsWith("https://api.github.com")) {
+      return false;
+    }
+    for (const [pattern, response] of Object.entries(requests)) {
+      if (url.includes(pattern)) {
+        if (response === null) {
+          return { status: 404 };
+        }
+        return {
+          body: JSON.stringify(response),
+          headers: { "content-type": "application/json" },
+        };
+      }
+    }
+    console.log("Unhandled request: " + url);
+    return { status: 404 };
+  });
+}
