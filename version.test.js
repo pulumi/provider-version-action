@@ -250,6 +250,32 @@ describe("pull_request", () => {
   });
 });
 
+describe("schedule", () => {
+  test("to default branch", async () => {
+    mockGitHubEndpoints({
+      "repos/owner/repo/releases/latest": { tag_name: "v1.2.1" },
+      "repos/owner/repo/commits/699a10d86efd595503aa8c3ecfff753a7ed3cbd4": {
+        commit: {
+          message: "Commit message",
+          committer: { date: "2020-01-01T00:00:00Z" },
+        },
+      },
+    });
+
+    expect(
+      await calculateVersion({
+        eventName: "schedule",
+        sha: "699a10d86efd595503aa8c3ecfff753a7ed3cbd4",
+        ref: "refs/heads/master",
+        repo: {
+          owner: "owner",
+          repo: "repo",
+        },
+      })
+    ).toBe("1.3.0-alpha.1577836800+699a10d");
+  });
+});
+
 function mockGitHubEndpoints(requests = {}) {
   fetch.mockResponse(async (req) => {
     const url = req.url;
