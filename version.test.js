@@ -78,6 +78,35 @@ describe("main/master branch pushed", () => {
   });
 });
 
+describe("workflow_dispatch", () => {
+  test("with previous release", async () => {
+    mockGitHubEndpoints({
+      "repos/owner/repo/releases/latest": { tag_name: "v1.0.0" },
+      "repos/owner/repo/commits/699a10d86efd595503aa8c3ecfff753a7ed3cbd4": {
+        commit: {
+          message: "Commit message",
+          committer: { date: "2020-01-01T00:00:00Z" },
+        },
+      },
+    });
+
+    expect(
+      await calculateVersion({
+        eventName: "workflow_dispatch",
+        sha: "699a10d86efd595503aa8c3ecfff753a7ed3cbd4",
+        ref: "refs/heads/master",
+        repo: {
+          owner: "owner",
+          repo: "repo",
+        },
+        payload: {
+          repository: { default_branch: "master" },
+        },
+      })
+    ).toBe("1.1.0-alpha.1577836800");
+  });
+});
+
 describe("Version branch pushed", () => {
   test("with previous release", async () => {
     mockGitHubEndpoints({});

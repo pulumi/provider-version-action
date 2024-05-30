@@ -28,12 +28,19 @@ export async function calculateVersion(context) {
     return calculateTagVersion(ref);
   }
 
-  if (eventName === "push" && ref.startsWith("refs/heads/")) {
+  if (
+    (eventName === "push" || eventName == "workflow_dispatch") &&
+    ref.startsWith("refs/heads/")
+  ) {
     // push events only
-    const headCommitTimestamp = context.payload?.head_commit?.timestamp;
-    const headCommitMessage = context.payload?.head_commit?.message;
+    let headCommitTimestamp = context.payload?.head_commit?.timestamp;
+    const headCommitMessage = context.payload?.head_commit?.message ?? "";
     localDebug(`head_commit.timestamp: ${headCommitTimestamp}`);
     localDebug(`head_commit.message: ${headCommitMessage}`);
+
+    if (headCommitTimestamp === undefined) {
+      headCommitTimestamp = await getCommitTimestamp(context.repo, sha);
+    }
 
     const branchName = ref.replace("refs/heads/", "");
     const asVersion = tryParseVersionBranch(branchName);
@@ -183,6 +190,9 @@ function getIncrementTypeFromLabels(labels) {
  * @returns {number | undefined}
  */
 function tryParsePrNumber(commitMessage) {
+  if (!commitMessage) {
+    return undefined;
+  }
   const prMatch = commitMessage.match(/\(#(\d+)\)/);
   if (prMatch) {
     const num = parseInt(prMatch[1], 10);
@@ -253,6 +263,7 @@ async function getCommitTimestamp(repo, sha) {
   if (commitDate === undefined) {
     throw new Error("Could not find commit date");
   }
+  localDebug(`Commit date: ${commitDate}`);
   return commitDate;
 }
 
