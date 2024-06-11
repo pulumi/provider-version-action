@@ -1,5 +1,4 @@
 import { warning, debug, isDebug } from "@actions/core";
-import { context } from "@actions/github";
 import { SemVer } from "semver";
 import { Octokit } from "octokit";
 
@@ -54,7 +53,7 @@ export async function calculateVersion(context) {
     if (branchName === defaultBranch) {
       localDebug(`Default branch pushed: ${defaultBranch}`);
       const previousRelease = await getLatestReleaseVersion(context.repo);
-      const increment = await getIncrementType(headCommitMessage);
+      const increment = await getIncrementType(context.repo, headCommitMessage);
       const nextVersion = previousRelease.inc(increment);
       return alphaVersion(nextVersion, headCommitTimestamp);
     }
@@ -151,15 +150,16 @@ function tryParseVersionBranch(branchName) {
 
 /**
  * Checks the PR to see if the major version should be incremented based on labels.
+ * @param {{ owner: string, repo: string }} repo
  * @param {string} commitMessage
  * @returns {Promise<'minor' | 'major'>}
  */
-async function getIncrementType(commitMessage) {
+async function getIncrementType(repo, commitMessage) {
   const prNumber = tryParsePrNumber(commitMessage);
   if (prNumber === undefined) {
     return "minor";
   }
-  const labels = await findAssociatedPrLabels(context.repo, prNumber);
+  const labels = await findAssociatedPrLabels(repo, prNumber);
   return getIncrementTypeFromLabels(labels);
 }
 
@@ -250,7 +250,8 @@ async function getLatestReleaseVersion(repo) {
 
 /**
  * Returns the ISO timestamp of the commit being built
- * @param {typeof context} context
+ * @param {{ owner: string, repo: string }} repo
+ * @param {string} sha
  * @returns {Promise<string>}
  */
 async function getCommitTimestamp(repo, sha) {

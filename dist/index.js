@@ -42084,13 +42084,10 @@ try {
 /* harmony export */ });
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0__ = __nccwpck_require__(2186);
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__nccwpck_require__.n(_actions_core__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _actions_github__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(5438);
-/* harmony import */ var _actions_github__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__nccwpck_require__.n(_actions_github__WEBPACK_IMPORTED_MODULE_1__);
-/* harmony import */ var semver__WEBPACK_IMPORTED_MODULE_2__ = __nccwpck_require__(1383);
-/* harmony import */ var semver__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__nccwpck_require__.n(semver__WEBPACK_IMPORTED_MODULE_2__);
-/* harmony import */ var octokit__WEBPACK_IMPORTED_MODULE_3__ = __nccwpck_require__(7467);
-/* harmony import */ var octokit__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__nccwpck_require__.n(octokit__WEBPACK_IMPORTED_MODULE_3__);
-
+/* harmony import */ var semver__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(1383);
+/* harmony import */ var semver__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__nccwpck_require__.n(semver__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var octokit__WEBPACK_IMPORTED_MODULE_2__ = __nccwpck_require__(7467);
+/* harmony import */ var octokit__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__nccwpck_require__.n(octokit__WEBPACK_IMPORTED_MODULE_2__);
 
 
 
@@ -42137,7 +42134,7 @@ async function calculateVersion(context) {
     const branchName = ref.replace("refs/heads/", "");
     const asVersion = tryParseVersionBranch(branchName);
     if (asVersion !== undefined) {
-      const baseVersion = new semver__WEBPACK_IMPORTED_MODULE_2__.SemVer(`${asVersion}.0.0`);
+      const baseVersion = new semver__WEBPACK_IMPORTED_MODULE_1__.SemVer(`${asVersion}.0.0`);
       localDebug(
         `Version branch pushed: ${branchName}, base version: ${baseVersion}`
       );
@@ -42146,7 +42143,7 @@ async function calculateVersion(context) {
     if (branchName === defaultBranch) {
       localDebug(`Default branch pushed: ${defaultBranch}`);
       const previousRelease = await getLatestReleaseVersion(context.repo);
-      const increment = await getIncrementType(headCommitMessage);
+      const increment = await getIncrementType(context.repo, headCommitMessage);
       const nextVersion = previousRelease.inc(increment);
       return alphaVersion(nextVersion, headCommitTimestamp);
     }
@@ -42168,7 +42165,7 @@ async function calculateVersion(context) {
     let nextVersion;
     if (asVersion !== undefined) {
       localDebug(`Version branch PR: ${baseRef}`);
-      nextVersion = new semver__WEBPACK_IMPORTED_MODULE_2__.SemVer(`${asVersion}.0.0`);
+      nextVersion = new semver__WEBPACK_IMPORTED_MODULE_1__.SemVer(`${asVersion}.0.0`);
     } else {
       const previousRelease = await getLatestReleaseVersion(context.repo);
       const increment = getIncrementTypeFromLabels(prLabels);
@@ -42222,7 +42219,7 @@ function calculateTagVersion(ref) {
   const tag = ref.replace("refs/tags/", "");
   localDebug(`tag: ${tag}`);
   // Ensure it's a valid semver version
-  const parsed = new semver__WEBPACK_IMPORTED_MODULE_2__.SemVer(tag);
+  const parsed = new semver__WEBPACK_IMPORTED_MODULE_1__.SemVer(tag);
   return parsed.version;
 }
 
@@ -42243,15 +42240,16 @@ function tryParseVersionBranch(branchName) {
 
 /**
  * Checks the PR to see if the major version should be incremented based on labels.
+ * @param {{ owner: string, repo: string }} repo
  * @param {string} commitMessage
  * @returns {Promise<'minor' | 'major'>}
  */
-async function getIncrementType(commitMessage) {
+async function getIncrementType(repo, commitMessage) {
   const prNumber = tryParsePrNumber(commitMessage);
   if (prNumber === undefined) {
     return "minor";
   }
-  const labels = await findAssociatedPrLabels(_actions_github__WEBPACK_IMPORTED_MODULE_1__.context.repo, prNumber);
+  const labels = await findAssociatedPrLabels(repo, prNumber);
   return getIncrementTypeFromLabels(labels);
 }
 
@@ -42301,7 +42299,7 @@ function tryParsePrNumber(commitMessage) {
  * @returns {Promise<{ name: string }[] | undefined>}
  */
 async function findAssociatedPrLabels(repo, prNumber) {
-  const octokit = new octokit__WEBPACK_IMPORTED_MODULE_3__.Octokit({ auth: process.env.GITHUB_TOKEN });
+  const octokit = new octokit__WEBPACK_IMPORTED_MODULE_2__.Octokit({ auth: process.env.GITHUB_TOKEN });
   const pr = await octokit.rest.pulls.get({
     ...repo,
     pull_number: prNumber,
@@ -42315,7 +42313,7 @@ async function findAssociatedPrLabels(repo, prNumber) {
  * @returns {Promise<SemVer>}
  */
 async function getLatestReleaseVersion(repo) {
-  const octokit = new octokit__WEBPACK_IMPORTED_MODULE_3__.Octokit({ auth: process.env.GITHUB_TOKEN });
+  const octokit = new octokit__WEBPACK_IMPORTED_MODULE_2__.Octokit({ auth: process.env.GITHUB_TOKEN });
   try {
     const response = await octokit.rest.repos.getLatestRelease({
       owner: repo.owner,
@@ -42324,29 +42322,30 @@ async function getLatestReleaseVersion(repo) {
     const latestTag = response?.data?.tag_name;
     if (latestTag === undefined) {
       localDebug("No latest release found, using 0.0.0 as the base version.");
-      return new semver__WEBPACK_IMPORTED_MODULE_2__.SemVer("0.0.0");
+      return new semver__WEBPACK_IMPORTED_MODULE_1__.SemVer("0.0.0");
     }
     localDebug(`Latest release tag: ${latestTag}`);
-    const parsed = new semver__WEBPACK_IMPORTED_MODULE_2__.SemVer(latestTag); // Ensure it's a valid semver version
+    const parsed = new semver__WEBPACK_IMPORTED_MODULE_1__.SemVer(latestTag); // Ensure it's a valid semver version
     if (parsed === null) {
       (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.warning)(`Latest release tag is an invalid semver version: ${latestTag}`);
-      return new semver__WEBPACK_IMPORTED_MODULE_2__.SemVer("0.0.0");
+      return new semver__WEBPACK_IMPORTED_MODULE_1__.SemVer("0.0.0");
     }
     return parsed;
   } catch (error) {
     // Prefer always returning some kind of version so we don't break builds due to network issues or unexpected release formats.
     (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.warning)(`Failed to get latest release: ${error.toString()}`);
-    return new semver__WEBPACK_IMPORTED_MODULE_2__.SemVer("0.0.0");
+    return new semver__WEBPACK_IMPORTED_MODULE_1__.SemVer("0.0.0");
   }
 }
 
 /**
  * Returns the ISO timestamp of the commit being built
- * @param {typeof context} context
+ * @param {{ owner: string, repo: string }} repo
+ * @param {string} sha
  * @returns {Promise<string>}
  */
 async function getCommitTimestamp(repo, sha) {
-  const octokit = new octokit__WEBPACK_IMPORTED_MODULE_3__.Octokit({ auth: process.env.GITHUB_TOKEN });
+  const octokit = new octokit__WEBPACK_IMPORTED_MODULE_2__.Octokit({ auth: process.env.GITHUB_TOKEN });
   const currentCommit = await octokit.rest.repos.getCommit({
     ...repo,
     ref: sha,
