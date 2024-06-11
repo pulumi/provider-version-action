@@ -42142,9 +42142,10 @@ async function calculateVersion(context) {
     }
     if (branchName === defaultBranch) {
       localDebug(`Default branch pushed: ${defaultBranch}`);
-      const previousRelease = await getLatestReleaseVersion(context.repo);
-      const increment = await getIncrementType(context.repo, headCommitMessage);
-      const nextVersion = previousRelease.inc(increment);
+      const nextVersion = await getDefaultBranchNextVersion(
+        context.repo,
+        headCommitMessage
+      );
       return alphaVersion(nextVersion, headCommitTimestamp);
     }
     localDebug(`Branch pushed: ${branchName}`);
@@ -42242,15 +42243,28 @@ function tryParseVersionBranch(branchName) {
  * Checks the PR to see if the major version should be incremented based on labels.
  * @param {{ owner: string, repo: string }} repo
  * @param {string} commitMessage
- * @returns {Promise<'minor' | 'major'>}
+ * @returns {Promise<SemVer>}
  */
-async function getIncrementType(repo, commitMessage) {
+async function getDefaultBranchNextVersion(repo, commitMessage) {
+  const previousRelease = await getLatestReleaseVersion(repo);
   const prNumber = tryParsePrNumber(commitMessage);
   if (prNumber === undefined) {
-    return "minor";
+    return previousRelease.inc("minor");
   }
-  const labels = await findAssociatedPrLabels(repo, prNumber);
-  return getIncrementTypeFromLabels(labels);
+  const octokit = new octokit__WEBPACK_IMPORTED_MODULE_2__.Octokit({ auth: process.env.GITHUB_TOKEN });
+  const pr = await octokit.rest.pulls.get({
+    ...repo,
+    pull_number: prNumber,
+  });
+  const prRef = pr.data?.head?.ref;
+  if (prRef !== undefined) {
+    const asVersion = tryParseVersionBranch(prRef);
+    if (asVersion !== undefined) {
+      return new semver__WEBPACK_IMPORTED_MODULE_1__.SemVer(`${asVersion}.0.0`);
+    }
+  }
+  const increment = getIncrementTypeFromLabels(pr.data?.labels);
+  return previousRelease.inc(increment);
 }
 
 /**
@@ -42291,20 +42305,6 @@ function tryParsePrNumber(commitMessage) {
     }
   }
   return undefined;
-}
-
-/**
- * @param {{ owner:string, repo: string }} repo
- * @param {number} prNumber
- * @returns {Promise<{ name: string }[] | undefined>}
- */
-async function findAssociatedPrLabels(repo, prNumber) {
-  const octokit = new octokit__WEBPACK_IMPORTED_MODULE_2__.Octokit({ auth: process.env.GITHUB_TOKEN });
-  const pr = await octokit.rest.pulls.get({
-    ...repo,
-    pull_number: prNumber,
-  });
-  return pr.data?.labels;
 }
 
 /**

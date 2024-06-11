@@ -104,6 +104,34 @@ describe("main/master branch pushed", () => {
       })
     ).toBe("2.0.0-alpha.1577836800");
   });
+
+  test("After merging version branch PR", async () => {
+    mockGitHubEndpoints({
+      "repos/owner/repo/releases/latest": { tag_name: "v1.0.0" },
+      "repos/owner/repo/pulls/4": {
+        head: { ref: "v2" },
+      },
+    });
+
+    expect(
+      await calculateVersion({
+        eventName: "push",
+        sha: "699a10d86efd595503aa8c3ecfff753a7ed3cbd4",
+        ref: "refs/heads/v2",
+        repo: {
+          owner: "owner",
+          repo: "repo",
+        },
+        payload: {
+          repository: { default_branch: "master" },
+          head_commit: {
+            message: "Commit message (#4)",
+            timestamp: "2020-01-01T00:00:00Z",
+          },
+        },
+      })
+    ).toBe("2.0.0-alpha.1577836800");
+  });
 });
 
 describe("workflow_dispatch", () => {
