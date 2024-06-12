@@ -150,10 +150,15 @@ function tryParseVersionBranch(branchName) {
 }
 
 /**
- * Checks the PR to see if the major version should be incremented based on labels.
+ * Calculates the next version number that will be released
+ * for a default branch push event. This is determined by
+ * the latest release version and the commit message.
+ * If the commit message contains a PR number, the PR's branch
+ * name will be checked for a version number. Otherwise, the
+ * increment type will be determined by PR labels.
  * @param {{ owner: string, repo: string }} repo
  * @param {string} commitMessage
- * @returns {Promise<SemVer>}
+ * @returns {Promise<SemVer>} The next version number to be released.
  */
 async function getDefaultBranchNextVersion(repo, commitMessage) {
   const previousRelease = await getLatestReleaseVersion(repo);
@@ -166,13 +171,15 @@ async function getDefaultBranchNextVersion(repo, commitMessage) {
     ...repo,
     pull_number: prNumber,
   });
+  // Check if the PR branch name is a version branch
   const prRef = pr.data?.head?.ref;
   if (prRef !== undefined) {
-    const asVersion = tryParseVersionBranch(prRef);
-    if (asVersion !== undefined) {
-      return new SemVer(`${asVersion}.0.0`);
+    const prBranchVersion = tryParseVersionBranch(prRef);
+    if (prBranchVersion !== undefined) {
+      return new SemVer(`${prBranchVersion}.0.0`);
     }
   }
+  // Otherwise, determine the increment type from the PR labels
   const increment = getIncrementTypeFromLabels(pr.data?.labels);
   return previousRelease.inc(increment);
 }
