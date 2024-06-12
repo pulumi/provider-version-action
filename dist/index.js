@@ -42169,8 +42169,12 @@ async function calculateVersion(context) {
       nextVersion = new semver__WEBPACK_IMPORTED_MODULE_1__.SemVer(`${asVersion}.0.0`);
     } else {
       const previousRelease = await getLatestReleaseVersion(context.repo);
-      const increment = getIncrementTypeFromLabels(prLabels);
-      nextVersion = previousRelease.inc(increment);
+      if (isMajorUpgradeBranch(baseRef)) {
+        nextVersion = previousRelease.inc("major");
+      } else {
+        const increment = getIncrementTypeFromLabels(prLabels);
+        nextVersion = previousRelease.inc(increment);
+      }
     }
     const timestamp = await getCommitTimestamp(context.repo, sha);
     const shortHash = context.sha.slice(0, 7);
@@ -42269,6 +42273,10 @@ async function getDefaultBranchNextVersion(repo, commitMessage) {
       return new semver__WEBPACK_IMPORTED_MODULE_1__.SemVer(`${prBranchVersion}.0.0`);
     }
   }
+  // Next, check if the branch name was generated from a major version upgrade
+  if (prRef !== undefined && isMajorUpgradeBranch(prRef)) {
+    return previousRelease.inc("major");
+  }
   // Otherwise, determine the increment type from the PR labels
   const increment = getIncrementTypeFromLabels(pr.data?.labels);
   return previousRelease.inc(increment);
@@ -42294,6 +42302,15 @@ function getIncrementTypeFromLabels(labels) {
   }
   // Default to minor as this is the most common increment type for providers.
   return "minor";
+}
+
+/**
+ * Tests if the branch name matches the pattern /upgrade-*-major/
+ * @param {string} branchName
+ * @returns {boolean}
+ */
+function isMajorUpgradeBranch(branchName) {
+  return branchName.startsWith("upgrade-") && branchName.endsWith("-major");
 }
 
 /**

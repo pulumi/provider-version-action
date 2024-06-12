@@ -132,6 +132,34 @@ describe("main/master branch pushed", () => {
       })
     ).toBe("2.0.0-alpha.1577836800");
   });
+
+  test("After merging major upgrade PR", async () => {
+    mockGitHubEndpoints({
+      "repos/owner/repo/releases/latest": { tag_name: "v1.0.0" },
+      "repos/owner/repo/pulls/4": {
+        head: { ref: "upgrade-xyz-to-v2.0.0-major" },
+      },
+    });
+
+    expect(
+      await calculateVersion({
+        eventName: "push",
+        sha: "699a10d86efd595503aa8c3ecfff753a7ed3cbd4",
+        ref: "refs/heads/v2",
+        repo: {
+          owner: "owner",
+          repo: "repo",
+        },
+        payload: {
+          repository: { default_branch: "master" },
+          head_commit: {
+            message: "Commit message (#4)",
+            timestamp: "2020-01-01T00:00:00Z",
+          },
+        },
+      })
+    ).toBe("2.0.0-alpha.1577836800");
+  });
 });
 
 describe("workflow_dispatch", () => {
@@ -268,6 +296,34 @@ describe("pull_request", () => {
         payload: {
           repository: { default_branch: "main" },
           pull_request: { base: { ref: "v2" } },
+        },
+      })
+    ).toBe("2.0.0-alpha.1577836800+699a10d");
+  });
+
+  test("from major version upgrade", async () => {
+    mockGitHubEndpoints({
+      "repos/owner/repo/releases/latest": { tag_name: "v1.2.1" },
+      "repos/owner/repo/commits/699a10d86efd595503aa8c3ecfff753a7ed3cbd4": {
+        commit: {
+          message: "Commit message",
+          committer: { date: "2020-01-01T00:00:00Z" },
+        },
+      },
+    });
+
+    expect(
+      await calculateVersion({
+        eventName: "pull_request",
+        sha: "699a10d86efd595503aa8c3ecfff753a7ed3cbd4",
+        ref: "refs/pull/4/merge",
+        repo: {
+          owner: "owner",
+          repo: "repo",
+        },
+        payload: {
+          repository: { default_branch: "main" },
+          pull_request: { base: { ref: "upgrade-foo-v2.0.1-major" } },
         },
       })
     ).toBe("2.0.0-alpha.1577836800+699a10d");
