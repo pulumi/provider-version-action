@@ -1,5 +1,4 @@
 import { warning, debug, isDebug } from "@actions/core";
-import { context } from "@actions/github";
 import { SemVer } from "semver";
 import { Octokit } from "octokit";
 
@@ -53,9 +52,10 @@ export async function calculateVersion(context) {
     }
     if (branchName === defaultBranch) {
       localDebug(`Default branch pushed: ${defaultBranch}`);
-      const previousRelease = await getLatestReleaseVersion(context.repo);
-      const increment = await getIncrementType(headCommitMessage);
-      const nextVersion = previousRelease.inc(increment);
+      const nextVersion = await getDefaultBranchNextVersion(
+        context.repo,
+        headCommitMessage
+      );
       return alphaVersion(nextVersion, headCommitTimestamp);
     }
     localDebug(`Branch pushed: ${branchName}`);
@@ -79,8 +79,12 @@ export async function calculateVersion(context) {
       nextVersion = new SemVer(`${asVersion}.0.0`);
     } else {
       const previousRelease = await getLatestReleaseVersion(context.repo);
-      const increment = getIncrementTypeFromLabels(prLabels);
-      nextVersion = previousRelease.inc(increment);
+      if (isMajorUpgradeBranch(baseRef)) {
+        nextVersion = previousRelease.inc("major");
+      } else {
+        const increment = getIncrementTypeFromLabels(prLabels);
+        nextVersion = previousRelease.inc(increment);
+      }
     }
     const timestamp = await getCommitTimestamp(context.repo, sha);
     const shortHash = context.sha.slice(0, 7);
@@ -150,17 +154,42 @@ function tryParseVersionBranch(branchName) {
 }
 
 /**
- * Checks the PR to see if the major version should be incremented based on labels.
+ * Calculates the next version number that will be released
+ * for a default branch push event. This is determined by
+ * the latest release version and the commit message.
+ * If the commit message contains a PR number, the PR's branch
+ * name will be checked for a version number. Otherwise, the
+ * increment type will be determined by PR labels.
+ * @param {{ owner: string, repo: string }} repo
  * @param {string} commitMessage
- * @returns {Promise<'minor' | 'major'>}
+ * @returns {Promise<SemVer>} The next version number to be released.
  */
-async function getIncrementType(commitMessage) {
+async function getDefaultBranchNextVersion(repo, commitMessage) {
+  const previousRelease = await getLatestReleaseVersion(repo);
   const prNumber = tryParsePrNumber(commitMessage);
   if (prNumber === undefined) {
-    return "minor";
+    return previousRelease.inc("minor");
   }
-  const labels = await findAssociatedPrLabels(context.repo, prNumber);
-  return getIncrementTypeFromLabels(labels);
+  const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+  const pr = await octokit.rest.pulls.get({
+    ...repo,
+    pull_number: prNumber,
+  });
+  // Check if the PR branch name is a version branch
+  const prRef = pr.data?.head?.ref;
+  if (prRef !== undefined) {
+    const prBranchVersion = tryParseVersionBranch(prRef);
+    if (prBranchVersion !== undefined) {
+      return new SemVer(`${prBranchVersion}.0.0`);
+    }
+  }
+  // Next, check if the branch name was generated from a major version upgrade
+  if (prRef !== undefined && isMajorUpgradeBranch(prRef)) {
+    return previousRelease.inc("major");
+  }
+  // Otherwise, determine the increment type from the PR labels
+  const increment = getIncrementTypeFromLabels(pr.data?.labels);
+  return previousRelease.inc(increment);
 }
 
 /**
@@ -186,6 +215,15 @@ function getIncrementTypeFromLabels(labels) {
 }
 
 /**
+ * Tests if the branch name matches the pattern /upgrade-*-major/
+ * @param {string} branchName
+ * @returns {boolean}
+ */
+function isMajorUpgradeBranch(branchName) {
+  return branchName.startsWith("upgrade-") && branchName.endsWith("-major");
+}
+
+/**
  * @param {string} commitMessage
  * @returns {number | undefined}
  */
@@ -201,20 +239,6 @@ function tryParsePrNumber(commitMessage) {
     }
   }
   return undefined;
-}
-
-/**
- * @param {{ owner:string, repo: string }} repo
- * @param {number} prNumber
- * @returns {Promise<{ name: string }[] | undefined>}
- */
-async function findAssociatedPrLabels(repo, prNumber) {
-  const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
-  const pr = await octokit.rest.pulls.get({
-    ...repo,
-    pull_number: prNumber,
-  });
-  return pr.data?.labels;
 }
 
 /**
@@ -250,7 +274,8 @@ async function getLatestReleaseVersion(repo) {
 
 /**
  * Returns the ISO timestamp of the commit being built
- * @param {typeof context} context
+ * @param {{ owner: string, repo: string }} repo
+ * @param {string} sha
  * @returns {Promise<string>}
  */
 async function getCommitTimestamp(repo, sha) {
