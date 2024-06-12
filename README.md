@@ -81,9 +81,11 @@ This action supports 3 build scenarios:
 When we're wanting to build for a different major version from the last release, we can do this using two methods:
 
 1. Use a version branch containing just the major version number e.g. (`v1` or `v7`). Pushing to this branch, or opening a pull request with this branch as the "base" will use this major version.
-2. Add the label `needs-release/major` to a pull request. This will cause the version number to be incremented by a major increment instead of a minor increment. The major increment will be used when building the PR and when building the commit after being merged.
+2. Add the label `needs-release/major` to a pull request. This will cause the version number to be incremented by a major increment instead of a minor increment.
 
-Note: if the `needs-release/major` label is used on a version branch, the label will be ignored and the version branch used.
+After a major version upgrade PR is merged, the next build of the default branch will also use the new major version.
+
+Note: If both a version branch and a `needs-release/major` label used, the version branch will take priority.
 
 ## Alpha Version Format
 
