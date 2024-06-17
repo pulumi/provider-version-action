@@ -42189,6 +42189,14 @@ async function calculateVersion(context) {
     return localAlphaVersion(nextVersion, timestamp, shortHash);
   }
 
+  if (eventName === "repository_dispatch") {
+    const previousRelease = await getLatestReleaseVersion(context.repo);
+    const nextVersion = previousRelease.inc("minor");
+    const timestamp = await getCommitTimestamp(context.repo, sha);
+    const shortHash = context.sha.slice(0, 7);
+    return localAlphaVersion(nextVersion, timestamp, shortHash);
+  }
+
   throw new Error(`Unsupported event: ${eventName}`);
 }
 
