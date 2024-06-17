@@ -42181,7 +42181,7 @@ async function calculateVersion(context) {
     return localAlphaVersion(nextVersion, timestamp, shortHash);
   }
 
-  if (eventName === "schedule") {
+  if (eventName === "schedule" || eventName === "repository_dispatch") {
     const previousRelease = await getLatestReleaseVersion(context.repo);
     const nextVersion = previousRelease.inc("minor");
     const timestamp = await getCommitTimestamp(context.repo, sha);
