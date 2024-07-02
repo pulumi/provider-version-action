@@ -324,7 +324,10 @@ describe("pull_request", () => {
         },
         payload: {
           repository: { default_branch: "main" },
-          pull_request: { base: { ref: "v2" } },
+          pull_request: {
+            base: { ref: "main" },
+            head: { ref: "v2" },
+          },
         },
       })
     ).toBe("2.0.0-alpha.1577836800+699a10d");
@@ -352,7 +355,10 @@ describe("pull_request", () => {
         },
         payload: {
           repository: { default_branch: "main" },
-          pull_request: { base: { ref: "upgrade-foo-v2.0.1-major" } },
+          pull_request: {
+            base: { ref: "main" },
+            head: { ref: "upgrade-foo-v2.0.1-major" },
+          },
         },
       })
     ).toBe("2.0.0-alpha.1577836800+699a10d");
@@ -379,7 +385,10 @@ describe("pull_request", () => {
         },
         payload: {
           repository: { default_branch: "main" },
-          pull_request: { base: { ref: "v21" } },
+          pull_request: {
+            base: { ref: "main" },
+            head: { ref: "v21" },
+          },
         },
       })
     ).toBe("21.0.0-alpha.1577836800+699a10d");
