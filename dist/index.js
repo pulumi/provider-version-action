@@ -42099,7 +42099,7 @@ const localDebug = (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.isDebug)() ? _a
 /**
  * Calculate the version to use for the current build.
  * @param {any} fetch
- * @param {typeof context} context
+ * @param {import("@actions/github/lib/context").Context} context
  */
 async function calculateVersion(context) {
   const eventName = context.eventName;
@@ -42111,6 +42111,11 @@ async function calculateVersion(context) {
   localDebug(`ref: ${ref}`);
   localDebug(`sha: ${sha}`);
   localDebug(`repository.default_branch: ${defaultBranch}`);
+  if ((0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.isDebug)()) {
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.group)("Context", () => {
+      (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(JSON.stringify(context, null, 2));
+    });
+  }
 
   if (eventName === "push" && ref.startsWith("refs/tags/")) {
     localDebug(`Tag pushed: ${ref}`);
