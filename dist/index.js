@@ -42161,20 +42161,20 @@ async function calculateVersion(context) {
 
   if (eventName === "pull_request") {
     // pull_request events only
-    const baseRef = context.payload?.pull_request?.base?.ref;
+    const headRef = context.payload?.pull_request?.head?.ref;
     const prLabels = context.payload?.pull_request?.labels;
     localDebug(`PR pushed: ${context.eventName} ${context.ref}`);
-    localDebug(`pull_request.base.ref: ${baseRef}`);
+    localDebug(`pull_request.head.ref: ${headRef}`);
     localDebug(`pull_request.labels: ${JSON.stringify(prLabels)}`);
 
-    const asVersion = tryParseVersionBranch(baseRef);
+    const asVersion = tryParseVersionBranch(headRef);
     let nextVersion;
     if (asVersion !== undefined) {
-      localDebug(`Version branch PR: ${baseRef}`);
+      localDebug(`Version branch PR: ${headRef}`);
       nextVersion = new semver__WEBPACK_IMPORTED_MODULE_1__.SemVer(`${asVersion}.0.0`);
     } else {
       const previousRelease = await getLatestReleaseVersion(context.repo);
-      if (isMajorUpgradeBranch(baseRef)) {
+      if (isMajorUpgradeBranch(headRef)) {
         nextVersion = previousRelease.inc("major");
       } else {
         const increment = getIncrementTypeFromLabels(prLabels);
@@ -42238,6 +42238,9 @@ function calculateTagVersion(ref) {
  * @returns {number | undefined}
  */
 function tryParseVersionBranch(branchName) {
+  if (!branchName) {
+    return undefined;
+  }
   const match = branchName.match(/^v(\d+)$/);
   if (match) {
     const version = parseInt(match[1], 10);
@@ -42315,6 +42318,9 @@ function getIncrementTypeFromLabels(labels) {
  * @returns {boolean}
  */
 function isMajorUpgradeBranch(branchName) {
+  if (!branchName) {
+    return false;
+  }
   return branchName.startsWith("upgrade-") && branchName.endsWith("-major");
 }
 
