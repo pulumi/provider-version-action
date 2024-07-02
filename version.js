@@ -1,4 +1,4 @@
-import { warning, debug, isDebug } from "@actions/core";
+import { warning, debug, isDebug, group } from "@actions/core";
 import { SemVer } from "semver";
 import { Octokit } from "octokit";
 
@@ -9,7 +9,7 @@ const localDebug = isDebug() ? debug : () => {};
 /**
  * Calculate the version to use for the current build.
  * @param {any} fetch
- * @param {typeof context} context
+ * @param {import("@actions/github/lib/context").Context} context
  */
 export async function calculateVersion(context) {
   const eventName = context.eventName;
@@ -21,6 +21,11 @@ export async function calculateVersion(context) {
   localDebug(`ref: ${ref}`);
   localDebug(`sha: ${sha}`);
   localDebug(`repository.default_branch: ${defaultBranch}`);
+  if (isDebug()) {
+    group("Context", () => {
+      debug(JSON.stringify(context, null, 2));
+    });
+  }
 
   if (eventName === "push" && ref.startsWith("refs/tags/")) {
     localDebug(`Tag pushed: ${ref}`);
