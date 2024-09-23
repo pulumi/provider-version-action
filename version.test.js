@@ -145,7 +145,7 @@ describe("main/master branch pushed", () => {
       await calculateVersion({
         eventName: "push",
         sha: "699a10d86efd595503aa8c3ecfff753a7ed3cbd4",
-        ref: "refs/heads/v2",
+        ref: "refs/heads/master",
         repo: {
           owner: "owner",
           repo: "repo",
@@ -159,6 +159,66 @@ describe("main/master branch pushed", () => {
         },
       })
     ).toBe("2.0.0-alpha.1577836800");
+  });
+
+  test("after merging PR with short major version branch name", async () => {
+    mockGitHubEndpoints({
+      "repos/owner/repo/releases/latest": { tag_name: "v1.0.0" },
+      "repos/owner/repo/pulls/4": {
+        head: { ref: "upgrade-to-v2-major" },
+      },
+    });
+
+    expect(
+      await calculateVersion({
+        eventName: "push",
+        sha: "699a10d86efd595503aa8c3ecfff753a7ed3cbd4",
+        ref: "refs/heads/master",
+        repo: {
+          owner: "owner",
+          repo: "repo",
+        },
+        payload: {
+          repository: { default_branch: "master" },
+          head_commit: {
+            message: "Upgrade to v2 (#4)",
+            timestamp: "2020-01-01T00:00:00Z",
+          },
+        },
+      })
+    ).toBe("2.0.0-alpha.1577836800");
+  });
+});
+
+describe("Manual run after merging to default branch", () => {
+  test("after merging PR with short major version branch name", async () => {
+    mockGitHubEndpoints({
+      "repos/owner/repo/releases/latest": { tag_name: "v5.89.0" },
+      "repos/owner/repo/pulls/2367": {
+        head: { ref: "upgrade-to-v6-major" },
+      },
+      "repos/owner/repo/commits/18927620756933474daed64f741429db57342e42": {
+        commit: {
+          message: "Upgrade to v6 major (#2367)",
+          committer: { date: "2020-01-01T00:00:00Z" },
+        },
+      },
+    });
+
+    expect(
+      await calculateVersion({
+        eventName: "workflow_dispatch",
+        sha: "18927620756933474daed64f741429db57342e42",
+        ref: "refs/heads/master",
+        repo: {
+          owner: "owner",
+          repo: "repo",
+        },
+        payload: {
+          repository: { default_branch: "master" },
+        },
+      })
+    ).toBe("6.0.0-alpha.1577836800");
   });
 });
 

@@ -38,13 +38,14 @@ export async function calculateVersion(context) {
   ) {
     // push events only
     let headCommitTimestamp = context.payload?.head_commit?.timestamp;
-    const headCommitMessage = context.payload?.head_commit?.message ?? "";
+    let headCommitMessage = context.payload?.head_commit?.message;
+    if (headCommitTimestamp === undefined || headCommitMessage === undefined) {
+      const headCommit = await getCommit(context.repo, sha);
+      headCommitTimestamp = headCommit.timestamp;
+      headCommitMessage = headCommit.message;
+    }
     localDebug(`head_commit.timestamp: ${headCommitTimestamp}`);
     localDebug(`head_commit.message: ${headCommitMessage}`);
-
-    if (headCommitTimestamp === undefined) {
-      headCommitTimestamp = await getCommitTimestamp(context.repo, sha);
-    }
 
     const branchName = ref.replace("refs/heads/", "");
     const asVersion = tryParseVersionBranch(branchName);
@@ -91,7 +92,7 @@ export async function calculateVersion(context) {
         nextVersion = previousRelease.inc(increment);
       }
     }
-    const timestamp = await getCommitTimestamp(context.repo, sha);
+    const { timestamp } = await getCommit(context.repo, sha);
     const shortHash = context.sha.slice(0, 7);
     return localAlphaVersion(nextVersion, timestamp, shortHash);
   }
@@ -99,7 +100,7 @@ export async function calculateVersion(context) {
   if (eventName === "schedule" || eventName === "repository_dispatch") {
     const previousRelease = await getLatestReleaseVersion(context.repo);
     const nextVersion = previousRelease.inc("minor");
-    const timestamp = await getCommitTimestamp(context.repo, sha);
+    const { timestamp } = await getCommit(context.repo, sha);
     const shortHash = context.sha.slice(0, 7);
     return localAlphaVersion(nextVersion, timestamp, shortHash);
   }
@@ -287,20 +288,24 @@ async function getLatestReleaseVersion(repo) {
  * Returns the ISO timestamp of the commit being built
  * @param {{ owner: string, repo: string }} repo
  * @param {string} sha
- * @returns {Promise<string>}
+ * @returns {Promise<{ timestamp: string, message: string }>}
  */
-async function getCommitTimestamp(repo, sha) {
+async function getCommit(repo, sha) {
   const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
   const currentCommit = await octokit.rest.repos.getCommit({
     ...repo,
     ref: sha,
   });
-  const commitDate = currentCommit?.data?.commit?.committer?.date;
-  if (commitDate === undefined) {
-    throw new Error("Could not find commit date");
+  const commit = currentCommit?.data?.commit;
+  if (commit === undefined) {
+    throw new Error(`Could not load commit data: ${sha}`);
   }
+  const commitDate = commit.committer?.date;
   localDebug(`Commit date: ${commitDate}`);
-  return commitDate;
+  return {
+    timestamp: commitDate,
+    message: commit.message,
+  };
 }
 
 /**
