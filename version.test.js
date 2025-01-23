@@ -541,6 +541,33 @@ describe("schedule", () => {
       })
     ).toBe("1.3.0-alpha.1577836800+699a10d");
   });
+
+  test("with explicit major version", async () => {
+    mockGitHubEndpoints({
+      "repos/owner/repo/releases/latest": { tag_name: "v1.2.1" },
+      "repos/owner/repo/commits/699a10d86efd595503aa8c3ecfff753a7ed3cbd4": {
+        commit: {
+          message: "Commit message",
+          committer: { date: "2020-01-01T00:00:00Z" },
+        },
+      },
+    });
+
+    expect(
+      await calculateVersion(
+        {
+          eventName: "schedule",
+          sha: "699a10d86efd595503aa8c3ecfff753a7ed3cbd4",
+          ref: "refs/heads/master",
+          repo: {
+            owner: "owner",
+            repo: "repo",
+          },
+        },
+        { majorVersion: 2 }
+      )
+    ).toBe("2.0.0-alpha.1577836800+699a10d");
+  });
 });
 
 function mockGitHubEndpoints(requests = {}) {

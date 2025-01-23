@@ -101,7 +101,9 @@ export async function calculateVersion(context, args) {
 
   if (eventName === "schedule" || eventName === "repository_dispatch") {
     const previousRelease = await getLatestReleaseVersion(context.repo);
-    const nextVersion = previousRelease.inc("minor");
+    let nextVersion = previousRelease.inc("minor");
+    // If a major version is provided, ensure we're using that major version.
+    nextVersion = ensureMajorVersion(nextVersion, majorVersion);
     const { timestamp } = await getCommit(context.repo, sha);
     const shortHash = context.sha.slice(0, 7);
     return localAlphaVersion(nextVersion, timestamp, shortHash);
@@ -257,7 +259,7 @@ function tryParsePrNumber(commitMessage) {
 
 /**
  * Get the latest release version from GitHub.
- * @param {{ owner: string, repo: string}} repo
+ * @param {{ owner: string, repo: string}} repo Repository to load releases from.
  * @returns {Promise<SemVer>}
  */
 async function getLatestReleaseVersion(repo) {
@@ -284,6 +286,23 @@ async function getLatestReleaseVersion(repo) {
     warning(`Failed to get latest release: ${error.toString()}`);
     return new SemVer("0.0.0");
   }
+}
+
+/**
+ *
+ * @param {SemVer} version
+ * @param {number | undefined} majorVersion
+ * @returns {SemVer}
+ */
+function ensureMajorVersion(version, majorVersion) {
+  if (majorVersion === undefined) {
+    return version;
+  }
+  if (version.major == majorVersion) {
+    return version;
+  }
+  // Reset to requested major version.
+  return new SemVer(`${majorVersion}.0.0`);
 }
 
 /**
