@@ -77,6 +77,35 @@ describe("main/master branch pushed", () => {
     ).toBe("0.1.0-alpha.1577836800");
   });
 
+  test("with explicit major version", async () => {
+    mockGitHubEndpoints({
+      // Make release not found
+      "repos/owner/repo/releases/latest": {},
+    });
+
+    expect(
+      await calculateVersion(
+        {
+          eventName: "push",
+          sha: "699a10d86efd595503aa8c3ecfff753a7ed3cbd4",
+          ref: "refs/heads/master",
+          repo: {
+            owner: "owner",
+            repo: "repo",
+          },
+          payload: {
+            repository: { default_branch: "master" },
+            head_commit: {
+              message: "Commit message",
+              timestamp: "2020-01-01T00:00:00Z",
+            },
+          },
+        },
+        { majorVersion: 2 }
+      )
+    ).toBe("2.0.0-alpha.1577836800");
+  });
+
   test("After merging PR with needs-release/major label", async () => {
     mockGitHubEndpoints({
       "repos/owner/repo/releases/latest": { tag_name: "v1.0.0" },
@@ -302,6 +331,32 @@ describe("Version branch pushed", () => {
         },
       })
     ).toBe("2.0.0-alpha.1577836800");
+  });
+
+  test("with explicit major version", async () => {
+    mockGitHubEndpoints({});
+
+    expect(
+      await calculateVersion(
+        {
+          eventName: "push",
+          sha: "699a10d86efd595503aa8c3ecfff753a7ed3cbd4",
+          ref: "refs/heads/v2",
+          repo: {
+            owner: "owner",
+            repo: "repo",
+          },
+          payload: {
+            repository: { default_branch: "master" },
+            head_commit: {
+              message: "Commit message",
+              timestamp: "2020-01-01T00:00:00Z",
+            },
+          },
+        },
+        { majorVersion: 3 }
+      )
+    ).toBe("3.0.0-alpha.1577836800");
   });
 });
 

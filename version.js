@@ -56,7 +56,10 @@ export async function calculateVersion(context, args) {
       localDebug(
         `Version branch pushed: ${branchName}, base version: ${baseVersion}`
       );
-      return alphaVersion(baseVersion, headCommitTimestamp);
+      return alphaVersion(
+        ensureMajorVersion(baseVersion, majorVersion),
+        headCommitTimestamp
+      );
     }
     if (branchName === defaultBranch) {
       localDebug(`Default branch pushed: ${defaultBranch}`);
@@ -64,12 +67,19 @@ export async function calculateVersion(context, args) {
         context.repo,
         headCommitMessage
       );
-      return alphaVersion(nextVersion, headCommitTimestamp);
+      return alphaVersion(
+        ensureMajorVersion(nextVersion, majorVersion),
+        headCommitTimestamp
+      );
     }
     localDebug(`Branch pushed: ${branchName}`);
     const previousRelease = await getLatestReleaseVersion(context.repo);
     const nextVersion = previousRelease.inc("minor");
-    return localAlphaVersion(nextVersion, headCommitTimestamp, sha);
+    return localAlphaVersion(
+      ensureMajorVersion(nextVersion, majorVersion),
+      headCommitTimestamp,
+      sha
+    );
   }
 
   if (eventName === "pull_request") {
