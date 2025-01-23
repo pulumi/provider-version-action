@@ -8,15 +8,17 @@ const localDebug = isDebug() ? debug : () => {};
 
 /**
  * Calculate the version to use for the current build.
- * @param {any} fetch
  * @param {import("@actions/github/lib/context").Context} context
+ * @param {{ majorVersion?: number }} args
  */
-export async function calculateVersion(context) {
+export async function calculateVersion(context, args) {
+  const majorVersion = args?.majorVersion;
   const eventName = context.eventName;
   const ref = context.ref;
   const sha = context.sha;
   const defaultBranch = context.payload?.repository?.default_branch;
 
+  localDebug(`major-version: ${majorVersion ?? ""}`);
   localDebug(`event_name: ${eventName}`);
   localDebug(`ref: ${ref}`);
   localDebug(`sha: ${sha}`);
