@@ -17,7 +17,8 @@ __nccwpck_require__.r(__webpack_exports__);
 
 
 try {
-  const version = await (0,_version__WEBPACK_IMPORTED_MODULE_2__/* .calculateVersion */ .x)(_actions_github__WEBPACK_IMPORTED_MODULE_1__.context);
+  const majorVersion = parseMajorVersion((0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput)("major-version"));
+  const version = await (0,_version__WEBPACK_IMPORTED_MODULE_2__/* .calculateVersion */ .x)(_actions_github__WEBPACK_IMPORTED_MODULE_1__.context, { majorVersion });
   (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.info)(`Calculated version: ${version}`);
   (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.setOutput)("version", version);
   const envVar = (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput)("set-env");
@@ -26,6 +27,24 @@ try {
   }
 } catch (error) {
   (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.setFailed)(error);
+}
+
+/**
+ *
+ * @param {string} majorVersion
+ * @returns {number | undefined}
+ */
+function parseMajorVersion(majorVersion) {
+  if (majorVersion === "") {
+    return undefined;
+  }
+  const parsed = parseInt(majorVersion, 10);
+  if (isNaN(parsed)) {
+    throw new Error(
+      `Invalid major version: ${majorVersion}. Must be an integer.`
+    );
+  }
+  return parsed;
 }
 
 __webpack_async_result__();
@@ -42095,18 +42114,22 @@ try {
 // Only write debug messages when the RUNNER_DEBUG environment variable is set.
 // This reduces noise in tests.
 const localDebug = (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.isDebug)() ? _actions_core__WEBPACK_IMPORTED_MODULE_0__.debug : () => {};
+// Skip writing info messages when running in Jest to reduce noise.
+const localInfo = process.env.JEST_WORKER_ID !== undefined ? () => {} : _actions_core__WEBPACK_IMPORTED_MODULE_0__.info;
 
 /**
  * Calculate the version to use for the current build.
- * @param {any} fetch
  * @param {import("@actions/github/lib/context").Context} context
+ * @param {{ majorVersion?: number }} args
  */
-async function calculateVersion(context) {
+async function calculateVersion(context, args) {
+  const majorVersion = args?.majorVersion;
   const eventName = context.eventName;
   const ref = context.ref;
   const sha = context.sha;
   const defaultBranch = context.payload?.repository?.default_branch;
 
+  localDebug(`major-version: ${majorVersion ?? ""}`);
   localDebug(`event_name: ${eventName}`);
   localDebug(`ref: ${ref}`);
   localDebug(`sha: ${sha}`);
@@ -42144,7 +42167,10 @@ async function calculateVersion(context) {
       localDebug(
         `Version branch pushed: ${branchName}, base version: ${baseVersion}`
       );
-      return alphaVersion(baseVersion, headCommitTimestamp);
+      return alphaVersion(
+        ensureMajorVersion(baseVersion, majorVersion),
+        headCommitTimestamp
+      );
     }
     if (branchName === defaultBranch) {
       localDebug(`Default branch pushed: ${defaultBranch}`);
@@ -42152,12 +42178,19 @@ async function calculateVersion(context) {
         context.repo,
         headCommitMessage
       );
-      return alphaVersion(nextVersion, headCommitTimestamp);
+      return alphaVersion(
+        ensureMajorVersion(nextVersion, majorVersion),
+        headCommitTimestamp
+      );
     }
     localDebug(`Branch pushed: ${branchName}`);
     const previousRelease = await getLatestReleaseVersion(context.repo);
     const nextVersion = previousRelease.inc("minor");
-    return localAlphaVersion(nextVersion, headCommitTimestamp, sha);
+    return localAlphaVersion(
+      ensureMajorVersion(nextVersion, majorVersion),
+      headCommitTimestamp,
+      sha
+    );
   }
 
   if (eventName === "pull_request") {
@@ -42182,6 +42215,7 @@ async function calculateVersion(context) {
         nextVersion = previousRelease.inc(increment);
       }
     }
+    nextVersion = ensureMajorVersion(nextVersion, majorVersion);
     const { timestamp } = await getCommit(context.repo, sha);
     const shortHash = context.sha.slice(0, 7);
     return localAlphaVersion(nextVersion, timestamp, shortHash);
@@ -42189,7 +42223,9 @@ async function calculateVersion(context) {
 
   if (eventName === "schedule" || eventName === "repository_dispatch") {
     const previousRelease = await getLatestReleaseVersion(context.repo);
-    const nextVersion = previousRelease.inc("minor");
+    let nextVersion = previousRelease.inc("minor");
+    // If a major version is provided, ensure we're using that major version.
+    nextVersion = ensureMajorVersion(nextVersion, majorVersion);
     const { timestamp } = await getCommit(context.repo, sha);
     const shortHash = context.sha.slice(0, 7);
     return localAlphaVersion(nextVersion, timestamp, shortHash);
@@ -42345,7 +42381,7 @@ function tryParsePrNumber(commitMessage) {
 
 /**
  * Get the latest release version from GitHub.
- * @param {{ owner: string, repo: string}} repo
+ * @param {{ owner: string, repo: string}} repo Repository to load releases from.
  * @returns {Promise<SemVer>}
  */
 async function getLatestReleaseVersion(repo) {
@@ -42372,6 +42408,27 @@ async function getLatestReleaseVersion(repo) {
     (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.warning)(`Failed to get latest release: ${error.toString()}`);
     return new semver__WEBPACK_IMPORTED_MODULE_1__.SemVer("0.0.0");
   }
+}
+
+/**
+ *
+ * @param {SemVer} version
+ * @param {number | undefined} majorVersion
+ * @returns {SemVer}
+ */
+function ensureMajorVersion(version, majorVersion) {
+  if (majorVersion === undefined) {
+    return version;
+  }
+  if (version.major == majorVersion) {
+    return version;
+  }
+  // Reset to requested major version.
+  const fixedVersion = new semver__WEBPACK_IMPORTED_MODULE_1__.SemVer(`${majorVersion}.0.0`);
+  localInfo(
+    `Expected major version ${majorVersion}, but would have inferred ${version}. Resetting to ${fixedVersion}.`
+  );
+  return fixedVersion;
 }
 
 /**

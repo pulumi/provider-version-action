@@ -9,6 +9,9 @@ The calculated version is always valid [semver 2.0.0](https://semver.org/) – w
 ```yaml
 - uses: pulumi/provider-version-action@v1
   with:
+    # Recommended major version to based generated version numbers on.
+    # If not specified, the major version will attempt to be inferred from the context.
+    major-version: 1
     # Optional name of the environment variable to set with the calculated version, for example: PROVIDER_VERSION
     # Defaults to empty which results in no environment variable being set.
     set-env: ''
@@ -72,13 +75,13 @@ jobs:
 
 This action supports 3 build scenarios:
 
-1. Pushing a version tag beginning with "v" (e.g. `v1.2.3`). The version from the tag will be used e.g. `1.2.3`
+1. Pushing a version tag beginning with "v" (e.g. `v1.2.3`). The exact version from the tag will be used e.g. `1.2.3`. This is not affected by the `major-version` input.
 2. Pushing to a main branch. An alpha version will be generated e.g. `1.2.3-alpha.1577836800`
 3. Building a pull request. An alpha version will be generated, with a shorthash suffix e.g. `1.2.3-alpha.1577836800+699a10d`
 
-### Major Versions
+### Implicit Major Versions
 
-When we're wanting to build for a different major version from the last release, we can do this using three methods:
+If we've not specified an explicit major version input, when we're wanting to build for a different major version from the last release, we can do this using three methods:
 
 1. Use a version branch containing just the major version number e.g. (`v1` or `v7`). Pushing to this branch, or opening a pull request with this branch as the "base" will use this major version.
 2. Name the branch with prefix `upgrade-` and suffix `-major` (e.g. `upgrade-aws-to-v2.0.0-major`). This will cause the version number to be incremented by a major increment instead of a minor increment.

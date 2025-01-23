@@ -1,12 +1,17 @@
-name: 'Provider Version'
-description: 'Calculate the version to be used during a Pulumi provider build.'
+name: "Provider Version"
+description: "Calculate the version to be used during a Pulumi provider build."
 inputs:
   set-env:
     required: false
-    description: 'Optional name of the environment variable to set with the calculated version.'
+    description: "Optional name of the environment variable to set with the calculated version."
+  major-version:
+    required: false
+    description: |
+      Forces a specific major version, if specified, otherwise will be inferred from contextual information.
+      Ignored for explicit tag pushes.
 outputs:
   version:
-    description: 'The calculated version'
+    description: "The calculated version"
 runs:
-  using: 'node20'
-  main: 'dist/index.js'
+  using: "node20"
+  main: "dist/index.js"
