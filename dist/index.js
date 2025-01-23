@@ -42114,6 +42114,8 @@ try {
 // Only write debug messages when the RUNNER_DEBUG environment variable is set.
 // This reduces noise in tests.
 const localDebug = (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.isDebug)() ? _actions_core__WEBPACK_IMPORTED_MODULE_0__.debug : () => {};
+// Skip writing info messages when running in Jest to reduce noise.
+const localInfo = process.env.JEST_WORKER_ID !== undefined ? () => {} : _actions_core__WEBPACK_IMPORTED_MODULE_0__.info;
 
 /**
  * Calculate the version to use for the current build.
@@ -42422,7 +42424,11 @@ function ensureMajorVersion(version, majorVersion) {
     return version;
   }
   // Reset to requested major version.
-  return new semver__WEBPACK_IMPORTED_MODULE_1__.SemVer(`${majorVersion}.0.0`);
+  const fixedVersion = new semver__WEBPACK_IMPORTED_MODULE_1__.SemVer(`${majorVersion}.0.0`);
+  localInfo(
+    `Expected major version ${majorVersion}, but would have inferred ${version}. Resetting to ${fixedVersion}.`
+  );
+  return fixedVersion;
 }
 
 /**

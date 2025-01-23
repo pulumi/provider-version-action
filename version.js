@@ -1,10 +1,12 @@
-import { warning, debug, isDebug, group } from "@actions/core";
+import { warning, debug, isDebug, info, group } from "@actions/core";
 import { SemVer } from "semver";
 import { Octokit } from "octokit";
 
 // Only write debug messages when the RUNNER_DEBUG environment variable is set.
 // This reduces noise in tests.
 const localDebug = isDebug() ? debug : () => {};
+// Skip writing info messages when running in Jest to reduce noise.
+const localInfo = process.env.JEST_WORKER_ID !== undefined ? () => {} : info;
 
 /**
  * Calculate the version to use for the current build.
@@ -313,7 +315,11 @@ function ensureMajorVersion(version, majorVersion) {
     return version;
   }
   // Reset to requested major version.
-  return new SemVer(`${majorVersion}.0.0`);
+  const fixedVersion = new SemVer(`${majorVersion}.0.0`);
+  localInfo(
+    `Expected major version ${majorVersion}, but would have inferred ${version}. Resetting to ${fixedVersion}.`
+  );
+  return fixedVersion;
 }
 
 /**
