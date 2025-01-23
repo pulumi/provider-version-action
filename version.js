@@ -94,6 +94,7 @@ export async function calculateVersion(context, args) {
         nextVersion = previousRelease.inc(increment);
       }
     }
+    nextVersion = ensureMajorVersion(nextVersion, majorVersion);
     const { timestamp } = await getCommit(context.repo, sha);
     const shortHash = context.sha.slice(0, 7);
     return localAlphaVersion(nextVersion, timestamp, shortHash);

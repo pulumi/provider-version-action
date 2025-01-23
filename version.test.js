@@ -334,6 +334,68 @@ describe("pull_request", () => {
     ).toBe("1.3.0-alpha.1577836800+699a10d");
   });
 
+  test("with expected major version", async () => {
+    mockGitHubEndpoints({
+      "repos/owner/repo/releases/latest": { tag_name: "v1.2.1" },
+      "repos/owner/repo/commits/699a10d86efd595503aa8c3ecfff753a7ed3cbd4": {
+        commit: {
+          message: "Commit message",
+          committer: { date: "2020-01-01T00:00:00Z" },
+        },
+      },
+    });
+
+    expect(
+      await calculateVersion(
+        {
+          eventName: "pull_request",
+          sha: "699a10d86efd595503aa8c3ecfff753a7ed3cbd4",
+          ref: "refs/pull/4/merge",
+          repo: {
+            owner: "owner",
+            repo: "repo",
+          },
+          payload: {
+            repository: { default_branch: "main" },
+            pull_request: { base: { ref: "main" } },
+          },
+        },
+        { majorVersion: 1 }
+      )
+    ).toBe("1.3.0-alpha.1577836800+699a10d");
+  });
+
+  test("with overriding major version", async () => {
+    mockGitHubEndpoints({
+      "repos/owner/repo/releases/latest": { tag_name: "v1.2.1" },
+      "repos/owner/repo/commits/699a10d86efd595503aa8c3ecfff753a7ed3cbd4": {
+        commit: {
+          message: "Commit message",
+          committer: { date: "2020-01-01T00:00:00Z" },
+        },
+      },
+    });
+
+    expect(
+      await calculateVersion(
+        {
+          eventName: "pull_request",
+          sha: "699a10d86efd595503aa8c3ecfff753a7ed3cbd4",
+          ref: "refs/pull/4/merge",
+          repo: {
+            owner: "owner",
+            repo: "repo",
+          },
+          payload: {
+            repository: { default_branch: "main" },
+            pull_request: { base: { ref: "main" } },
+          },
+        },
+        { majorVersion: 2 }
+      )
+    ).toBe("2.0.0-alpha.1577836800+699a10d");
+  });
+
   test("without previous release", async () => {
     mockGitHubEndpoints({
       "repos/owner/repo/releases/latest": {},
