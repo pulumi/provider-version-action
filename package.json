@@ -6,7 +6,8 @@
   "scripts": {
     "test": "jest",
     "build": "ncc build index.js -o dist",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "release": "./release.sh"
   },
   "keywords": [],
   "author": "",
