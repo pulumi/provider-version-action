@@ -50,7 +50,7 @@ fi
 # Update package.json version
 echo "Updating package.json version to ${VERSION}..."
 npm version ${VERSION} --no-git-tag-version
-git add package.json
+git add package.json package-lock.json
 git commit -m "Bump version to ${VERSION}"
 git push origin main
 
