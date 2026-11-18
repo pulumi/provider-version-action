@@ -22,7 +22,7 @@ jobs:
           set-env: "PROVIDER_VERSION"
 
       - name: Print outputs
-        run: 'echo "Step: ${{ steps.provider-version.outputs.version }}, Environment: ${PROVIDER_VERSION}"'
+        run: 'echo "Step: ${{ steps.provider-version.outputs.version }}, Environment: ${PROVIDER_VERSION}, Is latest: ${{ steps.provider-version.outputs.is-latest }}"'
 
       - if: steps.provider-version.outputs.version != env.PROVIDER_VERSION
         run: |

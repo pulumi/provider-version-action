@@ -126,6 +126,98 @@ export async function calculateVersion(context, args) {
 }
 
 /**
+ * Decide whether the version being built is the latest stable release of the repository.
+ * Only stable versions are checked against the repository's tags, so builds of alpha
+ * versions (pull requests, branch pushes, schedules) never make an API call.
+ * @param {import("@actions/github/lib/context").Context} context
+ * @param {string} version The version calculated by calculateVersion.
+ * @param {{ token?: string }} args
+ * @returns {Promise<boolean>}
+ */
+export async function calculateIsLatest(context, version, args) {
+  if (parseStableVersion(version) === undefined) {
+    localDebug(`${version} is not a stable version, so it is not latest.`);
+    return false;
+  }
+  const tags = await listVersionTags(context.repo, args?.token);
+  return isLatestRelease(version, tags);
+}
+
+/**
+ * Returns true when version is a stable X.Y.Z version (with or without a leading "v")
+ * that is greater than or equal to every stable vX.Y.Z tag. Tags that are not exactly
+ * vX.Y.Z, such as prereleases (v1.2.3-alpha.1) or Go submodule tags (sdk/v1.2.3), are ignored.
+ * @param {string} version
+ * @param {string[]} tags Tag names, e.g. "v1.2.3".
+ * @returns {boolean}
+ */
+export function isLatestRelease(version, tags) {
+  const current = parseStableVersion(version);
+  if (current === undefined) {
+    return false;
+  }
+  for (const tag of tags) {
+    const tagVersion = parseStableTag(tag);
+    if (tagVersion !== undefined && tagVersion.compare(current) > 0) {
+      localInfo(`${tag} is newer than ${version}, so it is not latest.`);
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * @param {string} version X.Y.Z or vX.Y.Z
+ * @returns {SemVer | undefined}
+ */
+function parseStableVersion(version) {
+  return parseTriple(version, /^v?(\d+)\.(\d+)\.(\d+)$/);
+}
+
+/**
+ * @param {string} tag vX.Y.Z
+ * @returns {SemVer | undefined}
+ */
+function parseStableTag(tag) {
+  return parseTriple(tag, /^v(\d+)\.(\d+)\.(\d+)$/);
+}
+
+/**
+ * @param {string} value
+ * @param {RegExp} pattern Must capture exactly the major, minor and patch numbers.
+ * @returns {SemVer | undefined}
+ */
+function parseTriple(value, pattern) {
+  const match = value?.match(pattern);
+  if (!match) {
+    return undefined;
+  }
+  // Normalise through Number so leading zeros don't make SemVer reject the version.
+  return new SemVer(match.slice(1, 4).map(Number).join("."));
+}
+
+/**
+ * List the names of all tags starting with "v". Errors are not caught: a stable release
+ * must not silently lose its latest flag because the tags could not be read.
+ * @param {{ owner: string, repo: string }} repo
+ * @param {string | undefined} token
+ * @returns {Promise<string[]>}
+ */
+async function listVersionTags(repo, token) {
+  const octokit = new Octokit({ auth: token });
+  // The matching-refs endpoint is not paginated: it returns every matching ref at once.
+  const response = await octokit.rest.git.listMatchingRefs({
+    ...repo,
+    ref: "tags/v",
+  });
+  const tags = (response?.data ?? []).map((ref) =>
+    ref.ref.replace(/^refs\/tags\//, "")
+  );
+  localDebug(`Found ${tags.length} tags starting with "v".`);
+  return tags;
+}
+
+/**
  * @param {SemVer} baseVersion
  * @param {string} timestamp
  * @returns {string}
