@@ -1,4 +1,9 @@
-import { calculateVersion, findVersionBranch } from "./version";
+import {
+  calculateVersion,
+  calculateIsLatest,
+  findVersionBranch,
+  isLatestRelease,
+} from "./version";
 
 beforeEach(() => {
   fetch.resetMocks();
@@ -684,6 +689,76 @@ describe("schedule", () => {
         { majorVersion: 2 }
       )
     ).toBe("2.0.0-alpha.1577836800+699a10d");
+  });
+});
+
+describe("isLatestRelease", () => {
+  // Resembles a long-lived provider repository: a previous major still receiving
+  // backports, prereleases, and Go submodule tags.
+  const existingTags = [
+    "v9.36.0",
+    "v9.37.0",
+    "v9.37.1",
+    "v9.37.2",
+    "v9.37.3",
+    "v10.0.0-beta.1",
+    "v10.0.0",
+    "sdk/v10.0.0",
+    "v10.1.0",
+    "v10.2.0",
+    "v10.2.1",
+    "v10.2.2",
+    "v10.3.0-alpha.123",
+  ];
+  const withTags = (...tags) => [...existingTags, ...tags];
+
+  test.each([
+    ["highest stable version", "10.3.0", withTags("v10.3.0"), true],
+    ["backport on previous major", "9.37.4", withTags("v10.3.0", "v9.37.4"), false],
+    ["lower version tagged on a commit shared with main", "9.37.2", withTags("v10.3.0"), false],
+    ["patch backport on current major", "10.2.3", withTags("v10.3.0", "v10.2.3"), false],
+    ["prerelease version", "10.4.0-alpha.1", withTags("v10.3.0", "v10.4.0-alpha.1"), false],
+    ["build metadata version", "10.4.0+dirty", withTags("v10.3.0"), false],
+    ["higher prerelease tags are ignored", "10.3.1", withTags("v10.3.0", "v10.4.0-beta.1", "v10.3.1"), true],
+    ["higher Go submodule tags are ignored", "10.3.0", withTags("v10.3.0", "sdk/v11.0.0"), true],
+    ["first release", "0.1.0", ["v0.1.0"], true],
+    ["no tags", "0.1.0", [], true],
+    ["double-digit minor is newer than single-digit minor", "10.10.0", ["v10.9.9", "v10.10.0"], true],
+    ["single-digit minor is older than double-digit minor", "10.9.10", ["v10.10.0", "v10.9.10"], false],
+    ["version with leading v", "v10.3.0", withTags("v10.3.0"), true],
+    ["backport version with leading v", "v9.37.4", withTags("v10.3.0", "v9.37.4"), false],
+  ])("%s", (_name, version, tags, expected) => {
+    expect(isLatestRelease(version, tags)).toBe(expected);
+  });
+});
+
+describe("calculateIsLatest", () => {
+  const context = { repo: { owner: "owner", repo: "repo" } };
+
+  test("lists tags for a stable version", async () => {
+    mockGitHubEndpoints({
+      "repos/owner/repo/git/matching-refs/tags%2Fv": [
+        { ref: "refs/tags/v1.0.0" },
+        { ref: "refs/tags/v1.1.0" },
+      ],
+    });
+    expect(await calculateIsLatest(context, "1.1.0")).toBe(true);
+    expect(await calculateIsLatest(context, "1.0.0")).toBe(false);
+  });
+
+  test("does not list tags for an alpha version", async () => {
+    mockGitHubEndpoints();
+    expect(
+      await calculateIsLatest(context, "1.2.0-alpha.1577836800+699a10d")
+    ).toBe(false);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test("fails when tags cannot be listed", async () => {
+    mockGitHubEndpoints({
+      "repos/owner/repo/git/matching-refs/tags%2Fv": null,
+    });
+    await expect(calculateIsLatest(context, "1.1.0")).rejects.toThrow();
   });
 });
 

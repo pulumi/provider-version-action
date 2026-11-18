@@ -9,9 +9,19 @@ inputs:
     description: |
       Forces a specific major version, if specified, otherwise will be inferred from contextual information.
       Ignored for explicit tag pushes.
+  github-token:
+    required: false
+    default: ${{ github.token }}
+    description: |
+      Token used to list the repository's tags when calculating the is-latest output.
+      Needs read access to the repository's contents.
 outputs:
   version:
     description: "The calculated version"
+  is-latest:
+    description: |
+      "true" if the calculated version is a stable X.Y.Z version and no stable vX.Y.Z tag in the repository is higher, otherwise "false".
+      Prerelease tags and prefixed tags (e.g. sdk/v1.2.3) are ignored. Always "false" for builds that are not a stable release tag.
 runs:
   using: "node24"
   main: "dist/index.js"

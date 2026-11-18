@@ -18,13 +18,18 @@ __nccwpck_require__.r(__webpack_exports__);
 
 try {
   const majorVersion = parseMajorVersion((0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput)("major-version"));
-  const version = await (0,_version__WEBPACK_IMPORTED_MODULE_2__/* .calculateVersion */ .n)(_actions_github__WEBPACK_IMPORTED_MODULE_1__.context, { majorVersion });
+  const version = await (0,_version__WEBPACK_IMPORTED_MODULE_2__/* .calculateVersion */ .nj)(_actions_github__WEBPACK_IMPORTED_MODULE_1__.context, { majorVersion });
   (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.info)(`Calculated version: ${version}`);
   (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.setOutput)("version", version);
   const envVar = (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput)("set-env");
   if (envVar !== "") {
     (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.exportVariable)(envVar, version);
   }
+  const isLatest = await (0,_version__WEBPACK_IMPORTED_MODULE_2__/* .calculateIsLatest */ .Co)(_actions_github__WEBPACK_IMPORTED_MODULE_1__.context, version, {
+    token: (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput)("github-token"),
+  });
+  (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.info)(`Is latest release: ${isLatest}`);
+  (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.setOutput)("is-latest", String(isLatest));
 } catch (error) {
   (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.setFailed)(error);
 }
@@ -44956,8 +44961,10 @@ function wrappy (fn, cb) {
 
 "use strict";
 /* harmony export */ __nccwpck_require__.d(__webpack_exports__, {
-/* harmony export */   n: () => (/* binding */ calculateVersion)
+/* harmony export */   Co: () => (/* binding */ calculateIsLatest),
+/* harmony export */   nj: () => (/* binding */ calculateVersion)
 /* harmony export */ });
+/* unused harmony export isLatestRelease */
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0__ = __nccwpck_require__(7484);
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__nccwpck_require__.n(_actions_core__WEBPACK_IMPORTED_MODULE_0__);
 /* harmony import */ var semver__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(2088);
@@ -45089,6 +45096,98 @@ async function calculateVersion(context, args) {
   }
 
   throw new Error(`Unsupported event: ${eventName}`);
+}
+
+/**
+ * Decide whether the version being built is the latest stable release of the repository.
+ * Only stable versions are checked against the repository's tags, so builds of alpha
+ * versions (pull requests, branch pushes, schedules) never make an API call.
+ * @param {import("@actions/github/lib/context").Context} context
+ * @param {string} version The version calculated by calculateVersion.
+ * @param {{ token?: string }} args
+ * @returns {Promise<boolean>}
+ */
+async function calculateIsLatest(context, version, args) {
+  if (parseStableVersion(version) === undefined) {
+    localDebug(`${version} is not a stable version, so it is not latest.`);
+    return false;
+  }
+  const tags = await listVersionTags(context.repo, args?.token);
+  return isLatestRelease(version, tags);
+}
+
+/**
+ * Returns true when version is a stable X.Y.Z version (with or without a leading "v")
+ * that is greater than or equal to every stable vX.Y.Z tag. Tags that are not exactly
+ * vX.Y.Z, such as prereleases (v1.2.3-alpha.1) or Go submodule tags (sdk/v1.2.3), are ignored.
+ * @param {string} version
+ * @param {string[]} tags Tag names, e.g. "v1.2.3".
+ * @returns {boolean}
+ */
+function isLatestRelease(version, tags) {
+  const current = parseStableVersion(version);
+  if (current === undefined) {
+    return false;
+  }
+  for (const tag of tags) {
+    const tagVersion = parseStableTag(tag);
+    if (tagVersion !== undefined && tagVersion.compare(current) > 0) {
+      localInfo(`${tag} is newer than ${version}, so it is not latest.`);
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * @param {string} version X.Y.Z or vX.Y.Z
+ * @returns {SemVer | undefined}
+ */
+function parseStableVersion(version) {
+  return parseTriple(version, /^v?(\d+)\.(\d+)\.(\d+)$/);
+}
+
+/**
+ * @param {string} tag vX.Y.Z
+ * @returns {SemVer | undefined}
+ */
+function parseStableTag(tag) {
+  return parseTriple(tag, /^v(\d+)\.(\d+)\.(\d+)$/);
+}
+
+/**
+ * @param {string} value
+ * @param {RegExp} pattern Must capture exactly the major, minor and patch numbers.
+ * @returns {SemVer | undefined}
+ */
+function parseTriple(value, pattern) {
+  const match = value?.match(pattern);
+  if (!match) {
+    return undefined;
+  }
+  // Normalise through Number so leading zeros don't make SemVer reject the version.
+  return new semver__WEBPACK_IMPORTED_MODULE_1__.SemVer(match.slice(1, 4).map(Number).join("."));
+}
+
+/**
+ * List the names of all tags starting with "v". Errors are not caught: a stable release
+ * must not silently lose its latest flag because the tags could not be read.
+ * @param {{ owner: string, repo: string }} repo
+ * @param {string | undefined} token
+ * @returns {Promise<string[]>}
+ */
+async function listVersionTags(repo, token) {
+  const octokit = new octokit__WEBPACK_IMPORTED_MODULE_2__.Octokit({ auth: token });
+  // The matching-refs endpoint is not paginated: it returns every matching ref at once.
+  const response = await octokit.rest.git.listMatchingRefs({
+    ...repo,
+    ref: "tags/v",
+  });
+  const tags = (response?.data ?? []).map((ref) =>
+    ref.ref.replace(/^refs\/tags\//, "")
+  );
+  localDebug(`Found ${tags.length} tags starting with "v".`);
+  return tags;
 }
 
 /**

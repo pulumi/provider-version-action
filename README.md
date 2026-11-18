@@ -15,6 +15,9 @@ The calculated version is always valid [semver 2.0.0](https://semver.org/) – w
     # Optional name of the environment variable to set with the calculated version, for example: PROVIDER_VERSION
     # Defaults to empty which results in no environment variable being set.
     set-env: ''
+    # Token used to list the repository's tags when calculating the `is-latest` output.
+    # Defaults to the workflow's GITHUB_TOKEN. Needs read access to the repository's contents.
+    github-token: ${{ github.token }}
 ```
 
 ### Outputs
@@ -22,6 +25,7 @@ The calculated version is always valid [semver 2.0.0](https://semver.org/) – w
 | Name | Description | Example |
 | - | - | - |
 | `version` | The calculated version for the current build | `1.3.0-alpha.1577836800+699a10d` |
+| `is-latest` | `true` if `version` is a stable `X.Y.Z` release and no stable `vX.Y.Z` tag in the repository is higher, otherwise `false`. See [Latest Release](#latest-release). | `true` |
 
 ## Examples
 
@@ -90,6 +94,14 @@ If we've not specified an explicit major version input, when we're wanting to bu
 After a major version upgrade PR is merged, the next build of the default branch will also use the new major version.
 
 Note: If both a version branch and a `needs-release/major` label used, the version branch will take priority.
+
+## Latest Release
+
+The `is-latest` output says whether the version being built should be marked as the repository's latest release, for example via `make_latest` when creating the GitHub release.
+
+It is `true` only when the calculated version is a stable `X.Y.Z` version (no prerelease or build suffix) and no stable `vX.Y.Z` tag in the repository is higher. Versions are compared numerically, so `10.10.0` is higher than `10.9.9`. Tags that are not exactly `vX.Y.Z` are ignored, such as prereleases (`v1.4.0-beta.1`) and Go submodule tags (`sdk/v2.0.0`). Branch ancestry and the repository's current latest release are not considered.
+
+The repository's tags are only listed for stable versions, using the GitHub API with the `github-token` input, so no particular checkout depth is required. If the tags cannot be listed for a stable version the action fails rather than reporting `false`. Builds of alpha versions (pull requests, branch pushes, schedules) always report `false` without calling the API.
 
 ## Alpha Version Format
 

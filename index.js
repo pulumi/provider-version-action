@@ -6,7 +6,7 @@ import {
   info,
 } from "@actions/core";
 import * as github from "@actions/github";
-import { calculateVersion } from "./version";
+import { calculateVersion, calculateIsLatest } from "./version";
 
 try {
   const majorVersion = parseMajorVersion(getInput("major-version"));
@@ -17,6 +17,11 @@ try {
   if (envVar !== "") {
     exportVariable(envVar, version);
   }
+  const isLatest = await calculateIsLatest(github.context, version, {
+    token: getInput("github-token"),
+  });
+  info(`Is latest release: ${isLatest}`);
+  setOutput("is-latest", String(isLatest));
 } catch (error) {
   setFailed(error);
 }
